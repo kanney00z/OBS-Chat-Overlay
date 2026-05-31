@@ -1,0 +1,6 @@
+{
+  "name": "OBS Chat Overlay for IndoFinity",
+  "description": "A highly-customizable, beautiful OBS Chat Overlay and Alerts widget for IndoFinity streaming WebSocket.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

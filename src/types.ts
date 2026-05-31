@@ -1,0 +1,58 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export type OverlayTheme = 'geometric' | 'cyberpunk' | 'glassmorphism' | 'bubblechat' | 'minimal' | 'retro' | 'twitch';
+
+export interface OverlaySettings {
+  wsUrl: string;
+  theme: OverlayTheme;
+  fontSize: number; // in px
+  maxMessages: number;
+  messageLifetime: number; // in seconds, 0 means permanent
+  showAvatars: boolean;
+  showBadges: boolean;
+  alertSounds: boolean;
+  textToSpeech: boolean;
+  ttsVoiceRate: number;
+  ttsVoicePitch: number;
+  highlightKeywords: string[];
+  ignoredUsers: string[];
+  animationStyle: 'slide-up' | 'slide-left' | 'fade-in' | 'scale-pop';
+  testChannelName: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  timestamp: number;
+  type: 'chat' | 'gift' | 'like' | 'follow' | 'share';
+  uniqueId: string; // @handle
+  nickname: string; // friendly name
+  comment?: string; // chat message text
+  profilePictureUrl?: string; // avatar
+  
+  // Badges
+  isModerator?: boolean;
+  isSubscriber?: boolean;
+  isVip?: boolean;
+
+  // Gift details
+  giftName?: string;
+  giftIcon?: string;
+  repeatCount?: number;
+  diamondCount?: number;
+
+  // Like details
+  likeCount?: number;
+}
+
+export interface AlertEvent {
+  id: string;
+  type: 'gift' | 'like' | 'follow' | 'share';
+  uniqueId: string;
+  nickname: string;
+  profilePictureUrl?: string;
+  detailText: string;
+  timestamp: number;
+}
