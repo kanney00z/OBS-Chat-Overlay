@@ -885,6 +885,17 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         .text-shadow {
           text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 1px rgba(0, 0, 0, 0.5);
         }
+        #chat-scroller::-webkit-scrollbar,
+        #chat-overlay-root::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          background: transparent !important;
+        }
+        #chat-scroller,
+        #chat-overlay-root {
+          -ms-overflow-style: none !important;
+          scrollbar-width: none !important;
+        }
       `}</style>
     </div>
   );
