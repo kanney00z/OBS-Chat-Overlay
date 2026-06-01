@@ -234,11 +234,11 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
     // 3. Trigger TTS if applicable
     if (messageObj.type === 'chat' && settings.textToSpeech && messageObj.comment) {
-      triggerTTS(`${messageObj.nickname} says: ${messageObj.comment}`);
+      triggerTTS(`${messageObj.nickname} กล่าวว่า ${messageObj.comment}`);
     } else if (messageObj.type === 'gift' && settings.textToSpeech) {
-      triggerTTS(`${messageObj.nickname} sent a ${messageObj.giftName}!`);
+      triggerTTS(`${messageObj.nickname} ส่งของขวัญ ${messageObj.giftName}!`);
     } else if (messageObj.type === 'follow' && settings.textToSpeech) {
-      triggerTTS(`${messageObj.nickname} followed your stream!`);
+      triggerTTS(`${messageObj.nickname} กดติดตามสตรีมของคุณแล้ว!`);
     }
 
     // 4. Update core comments stack
@@ -254,13 +254,13 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     if (messageObj.type !== 'chat') {
       let detailText = '';
       if (messageObj.type === 'gift') {
-        detailText = `sent a ${messageObj.giftName} x${messageObj.repeatCount || 1}!`;
+        detailText = `ส่งของขวัญ ${messageObj.giftName} x${messageObj.repeatCount || 1}!`;
       } else if (messageObj.type === 'follow') {
-        detailText = `is now following!`;
+        detailText = `ได้กดติดตามแล้ว!`;
       } else if (messageObj.type === 'share') {
-        detailText = `shared the stream!`;
+        detailText = `ได้แชร์สตรีมแล้ว!`;
       } else if (messageObj.type === 'like') {
-        detailText = `liked the stream!`;
+        detailText = `ได้ถูกใจสตรีมแล้ว!`;
       }
 
       const alertId = Math.random().toString(36).substr(2, 9);
@@ -612,8 +612,8 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         <div className="absolute top-4 left-4 bg-red-950/90 border border-red-500/30 rounded-xl px-4 py-3 shadow-2xl flex items-center gap-3 backdrop-blur-md pointer-events-auto max-w-sm z-30 transition-all">
           <WifiOff className="text-red-400 w-5 h-5 flex-shrink-0 animate-pulse" />
           <div className="flex-1">
-            <h4 className="text-[12px] font-bold text-red-200 uppercase tracking-widest font-mono">Connecting to stream...</h4>
-            <p className="text-[11px] text-red-300/80 mt-0.5">Attempting server feed on: <code className="bg-red-900/40 px-1 py-0.5 rounded font-mono text-[10px] break-all">{settings.wsUrl}</code></p>
+            <h4 className="text-[12px] font-bold text-red-200 uppercase tracking-widest font-mono">กำลังเชื่อมต่อกับสตรีม...</h4>
+            <p className="text-[11px] text-red-300/80 mt-0.5">กำลังพยายามดึงข้อมูลฟีดเซิร์ฟเวอร์จาก: <code className="bg-red-900/40 px-1 py-0.5 rounded font-mono text-[10px] break-all">{settings.wsUrl}</code></p>
           </div>
         </div>
       )}
@@ -638,7 +638,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                      <Share2 className="w-5 h-5 flex-shrink-0" />}
                   </div>
                   <div>
-                    <h5 className="font-mono text-zinc-400 uppercase text-[9px] tracking-widest font-extrabold">NEW EVENTS FEED</h5>
+                    <h5 className="font-mono text-zinc-400 uppercase text-[9px] tracking-widest font-extrabold">ฟีดกิจกรรมใหม่ล่าสุด</h5>
                     <p className="font-sans text-[13px] text-white font-medium mt-0.5">
                       <strong className="text-indigo-400">@{activeAlert.nickname}</strong> {activeAlert.detailText}
                     </p>
@@ -657,7 +657,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                      <Share2 className="w-6 h-6 text-lime-400 flex-shrink-0" />}
                   </div>
                   <div>
-                    <h5 className="font-mono text-[#00F0FF] uppercase text-[11px] tracking-widest font-extrabold animate-pulse">ALERT RECEIVED</h5>
+                    <h5 className="font-mono text-[#00F0FF] uppercase text-[11px] tracking-widest font-extrabold animate-pulse">ตรวจพบกิจกรรมเปิดใหม่</h5>
                     <p className="font-sans text-[13px] text-white font-medium mt-0.5">
                       <strong className="text-pink-500">@{activeAlert.nickname}</strong> {activeAlert.detailText}
                     </p>
@@ -690,7 +690,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                      <Share2 className="w-5 h-5 flex-shrink-0" />}
                   </div>
                   <div>
-                    <span className="text-[12px] font-bold text-slate-800 tracking-wider uppercase">NEW NOTIFICATION</span>
+                    <span className="text-[12px] font-bold text-slate-800 tracking-wider uppercase">การแจ้งเตือนสตรีมสด</span>
                     <p className="text-[14.5px] font-bold text-slate-950">
                       <strong>@{activeAlert.nickname}</strong> {activeAlert.detailText}
                     </p>
@@ -719,7 +719,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                      <Share2 className="w-5 h-5" />}
                   </div>
                   <div>
-                    <h5 className="text-[10px] text-lime-400 font-extrabold uppercase animate-pulse">!ALERT SUCCESS!</h5>
+                    <h5 className="text-[10px] text-lime-400 font-extrabold uppercase animate-pulse">!ตรวจพบกิจกรรมสำเร็จ!</h5>
                     <p className="text-[13px] text-white mt-1">
                       @{activeAlert.nickname.toUpperCase()} <span className="text-lime-300">{activeAlert.detailText.toUpperCase()}</span>
                     </p>
@@ -736,7 +736,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                      <Share2 className="w-4 h-4 flex-shrink-0" />}
                   </div>
                   <div>
-                    <h5 className="text-[10px] text-purple-400 font-semibold tracking-wide uppercase">STREAM EVENT</h5>
+                    <h5 className="text-[10px] text-purple-400 font-semibold tracking-wide uppercase">กิจกรรมสตรีมสด</h5>
                     <p className="text-[13px] text-slate-100 font-bold">
                       @{activeAlert.nickname} <span className="text-slate-300 font-normal">{activeAlert.detailText}</span>
                     </p>
@@ -852,20 +852,20 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                             <Gift className="w-4 h-4 flex-shrink-0 animate-bounce" />
                           )}
                           <span className="font-semibold text-[13px]">
-                            Sent {msg.giftName} <strong className="text-amber-400 text-[14px]">x{msg.repeatCount}</strong>!
+                            ส่งของขวัญ {msg.giftName} <strong className="text-amber-400 text-[14px]">x{msg.repeatCount}</strong> ชิ้น!
                           </span>
                         </div>
                       ) : msg.type === 'follow' ? (
                         <span className="text-cyan-400 font-semibold flex items-center gap-1 py-0.5">
-                          <UserPlus className="w-3.5 h-3.5 flex-shrink-0 inline" /> Followed the stream!
+                          <UserPlus className="w-3.5 h-3.5 flex-shrink-0 inline" /> ได้กดติดตามสตรีมสดแล้ว!
                         </span>
                       ) : msg.type === 'like' ? (
                         <span className="text-rose-400 font-semibold flex items-center gap-1 py-0.5">
-                          <Heart className="w-3.5 h-3.5 flex-shrink-0 inline fill-rose-500 text-rose-500" /> Liked (x{msg.likeCount})!
+                          <Heart className="w-3.5 h-3.5 flex-shrink-0 inline fill-rose-500 text-rose-500" /> ถูกใจสตรีมสดแล้ว (x{msg.likeCount})!
                         </span>
                       ) : (
                         <span className="text-lime-400 font-semibold flex items-center gap-1 py-0.5">
-                          <Share2 className="w-3.5 h-3.5 flex-shrink-0 inline" /> Shared the stream!
+                          <Share2 className="w-3.5 h-3.5 flex-shrink-0 inline" /> ได้ช่วยแชร์สตรีมสดแล้ว!
                         </span>
                       )}
                     </div>
