@@ -33,6 +33,8 @@ export default function DashboardView() {
   });
 
   const [copiedChat, setCopiedChat] = useState(false);
+  const [copiedChatOnly, setCopiedChatOnly] = useState(false);
+  const [copiedAlertsOnly, setCopiedAlertsOnly] = useState(false);
   const [copiedImages, setCopiedImages] = useState(false);
   const [backgroundType, setBackgroundType] = useState<'checkerboard' | 'game' | 'dark' | 'green'>('game');
   const [customComment, setCustomComment] = useState('');
@@ -68,7 +70,7 @@ export default function DashboardView() {
   ];
 
   // Helper to build a clean overlay URL with custom override parameter
-  const buildOverlayUrl = (mode: 'chat_alerts' | 'images_only') => {
+  const buildOverlayUrl = (mode: 'chat_alerts' | 'images_only' | 'chat_only' | 'alerts_only') => {
     const base = window.location.origin;
     const params = new URLSearchParams();
     
@@ -99,12 +101,26 @@ export default function DashboardView() {
   };
 
   const chatAlertsOverlayUrl = buildOverlayUrl('chat_alerts');
+  const chatOnlyOverlayUrl = buildOverlayUrl('chat_only');
+  const alertsOnlyOverlayUrl = buildOverlayUrl('alerts_only');
   const imagesOnlyOverlayUrl = buildOverlayUrl('images_only');
 
   const copyChatToClipboard = () => {
     navigator.clipboard.writeText(chatAlertsOverlayUrl);
     setCopiedChat(true);
     setTimeout(() => setCopiedChat(false), 3000);
+  };
+
+  const copyChatOnlyToClipboard = () => {
+    navigator.clipboard.writeText(chatOnlyOverlayUrl);
+    setCopiedChatOnly(true);
+    setTimeout(() => setCopiedChatOnly(false), 3000);
+  };
+
+  const copyAlertsOnlyToClipboard = () => {
+    navigator.clipboard.writeText(alertsOnlyOverlayUrl);
+    setCopiedAlertsOnly(true);
+    setTimeout(() => setCopiedAlertsOnly(false), 3000);
   };
 
   const copyImagesToClipboard = () => {
@@ -304,9 +320,9 @@ export default function DashboardView() {
       </header>
 
       {/* Main Grid: Control Panel (Left), Simulated Stream Backdrop (Center), Stream Control Panel (Right) */}
-      <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 overflow-hidden max-h-[calc(100vh-69px)]">
+      <div className="flex-grow grid grid-cols-1 xl:grid-cols-12 xl:overflow-hidden xl:h-[calc(100vh-69px)] overflow-y-auto">
         {/* Left column config workspace (Span 4) */}
-        <section className="xl:col-span-4 border-r border-zinc-900 bg-zinc-950/40 flex flex-col overflow-y-auto">
+        <section className="xl:col-span-4 border-r border-zinc-900 bg-zinc-950/40 flex flex-col h-auto xl:h-full overflow-hidden">
           {/* Tabs for settings */}
           <div className="flex border-b border-zinc-900 shrink-0 bg-zinc-950/80 font-mono text-[11px] uppercase tracking-wider font-bold">
             <button 
@@ -343,7 +359,7 @@ export default function DashboardView() {
             </button>
           </div>
 
-          <div className="p-5 flex-1 space-y-6">
+          <div className="p-5 flex-1 overflow-y-auto space-y-6">
             {/* GENERAL LAYOUT TAB */}
             {activeTab === 'general' && (
               <div className="space-y-6">
@@ -683,67 +699,123 @@ export default function DashboardView() {
           </div>
 
           {/* Core copy link panel at the bottom of configurations */}
-          <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-4">
+          <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-3 shrink-0 overflow-y-auto max-h-[380px]">
+            {/* Link 1: Chat and Events */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 font-mono flex items-center gap-1.5 mb-1.5">
-                <Sliders className="w-3.5 h-3.5" /> OBS ลิงก์ที่ 1: กล่องแชทและกิจกรรมปกติ
+              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 font-mono flex items-center gap-1.5 mb-1">
+                <Sliders className="w-3.5 h-3.5" /> OBS ลิงก์ที่ 1: แชทและกิจกรรมรวมกัน
               </h4>
-              <p className="text-[10px] text-zinc-500 font-mono uppercase mb-2">
-                Chat & Events Overlay (excludes image highlights)
+              <p className="text-[9.5px] text-zinc-500 font-mono uppercase mb-1.5">
+                Full Overlay: Chat list + Event alerts popped on top
               </p>
-              <div className="bg-zinc-900 border border-zinc-800 rounded-none p-2 flex items-center justify-between gap-2 overflow-hidden">
-                <span className="font-mono text-[11px] text-zinc-400 truncate flex-1 min-w-0 pr-2">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-none p-2 flex items-center justify-between gap-2 overflow-hidden font-mono text-[10.5px]">
+                <span className="text-zinc-450 truncate flex-1 min-w-0 pr-2">
                   {chatAlertsOverlayUrl}
                 </span>
                 <button 
                   onClick={copyChatToClipboard}
-                  className={`py-1.5 px-3 rounded-none text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
+                  className={`py-1 px-2.5 rounded-none text-[11px] font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
                     copiedChat 
                       ? 'bg-emerald-600 text-white' 
                       : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
                   }`}
                   id="copy-chat-overlay-btn"
                 >
-                  {copiedChat ? <Check className="w-3.5 h-3.5" /> : <Clipboard className="w-3.5 h-3.5" />}
+                  {copiedChat ? <Check className="w-3 h-3" /> : <Clipboard className="w-3 h-3" />}
                   {copiedChat ? 'Copied!' : 'Copy'}
                 </button>
               </div>
             </div>
 
-            <div className="pt-1.5 border-t border-zinc-900">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-[#da2a7a] font-mono flex items-center gap-1.5 mb-1.5">
-                <Image className="w-3.5 h-3.5 text-pink-400" /> OBS ลิงก์ที่ 2: แสดงรูปภาพโดยเฉพาะ
+            {/* Link 2: Chat ONLY */}
+            <div className="pt-2 border-t border-zinc-900/60 font-mono text-[10.5px]">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 font-mono flex items-center gap-1.5 mb-1">
+                <MessageSquare className="w-3.5 h-3.5 text-sky-400 animate-none" /> OBS ลิงก์ที่ 2: แสดงแชทข้อความอย่างเดียว
               </h4>
-              <p className="text-[10px] text-zinc-550 font-mono uppercase mb-2">
-                Dedicated Shared Image Showcase Overlay
+              <p className="text-[9.5px] text-zinc-500 font-mono uppercase mb-1.5">
+                Chat Only: Pure chat box with NO notification banners
               </p>
               <div className="bg-zinc-900 border border-zinc-800 rounded-none p-2 flex items-center justify-between gap-2 overflow-hidden">
-                <span className="font-mono text-[11px] text-zinc-400 truncate flex-1 min-w-0 pr-2">
+                <span className="text-zinc-450 truncate flex-1 min-w-0 pr-2">
+                  {chatOnlyOverlayUrl}
+                </span>
+                <button 
+                  onClick={copyChatOnlyToClipboard}
+                  className={`py-1 px-2.5 rounded-none text-[11px] font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
+                    copiedChatOnly 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-sky-600 hover:bg-sky-500 text-white shadow-sm'
+                  }`}
+                  id="copy-chat-only-overlay-btn"
+                >
+                  {copiedChatOnly ? <Check className="w-3 h-3" /> : <Clipboard className="w-3 h-3" />}
+                  {copiedChatOnly ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            {/* Link 3: Alerts ONLY */}
+            <div className="pt-2 border-t border-zinc-900/60 font-mono text-[10.5px]">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-500 font-mono flex items-center gap-1.5 mb-1">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> OBS ลิงก์ที่ 3: แสดงเตือนกิจกรรมพิเศษอย่างเดียว
+              </h4>
+              <p className="text-[9.5px] text-zinc-500 font-mono uppercase mb-1.5">
+                Alerts Only: Followers, Likes, Gifts details ONLY without chat box
+              </p>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-none p-2 flex items-center justify-between gap-2 overflow-hidden font-mono">
+                <span className="text-zinc-450 truncate flex-1 min-w-0 pr-2">
+                  {alertsOnlyOverlayUrl}
+                </span>
+                <button 
+                  onClick={copyAlertsOnlyToClipboard}
+                  className={`py-1 px-2.5 rounded-none text-[11px] font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
+                    copiedAlertsOnly 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-amber-600 hover:bg-amber-500 text-white shadow-sm'
+                  }`}
+                  id="copy-alerts-only-overlay-btn"
+                >
+                  {copiedAlertsOnly ? <Check className="w-3 h-3" /> : <Clipboard className="w-3 h-3" />}
+                  {copiedAlertsOnly ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            {/* Link 4: Images ONLY */}
+            <div className="pt-2 border-t border-zinc-900/60 font-mono text-[10.5px]">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#da2a7a] font-mono flex items-center gap-1.5 mb-1">
+                <Image className="w-3.5 h-3.5 text-pink-400" /> OBS ลิงก์ที่ 4: แสดงรูปภาพโดยเฉพาะ
+              </h4>
+              <p className="text-[9.5px] text-zinc-500 font-mono uppercase mb-1.5">
+                Images Only: Dedicated Shared Image Showcase Overlay
+              </p>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-none p-2 flex items-center justify-between gap-2 overflow-hidden">
+                <span className="text-zinc-440 truncate flex-1 min-w-0 pr-2">
                   {imagesOnlyOverlayUrl}
                 </span>
                 <button 
                   onClick={copyImagesToClipboard}
-                  className={`py-1.5 px-3 rounded-none text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
+                  className={`py-1 px-2.5 rounded-none text-[11px] font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
                     copiedImages 
                       ? 'bg-emerald-600 text-white' 
                       : 'bg-[#da2a7a] hover:bg-[#b01e5d] text-white shadow-sm'
                   }`}
                   id="copy-images-overlay-btn"
                 >
-                  {copiedImages ? <Check className="w-3.5 h-3.5" /> : <Clipboard className="w-3.5 h-3.5" />}
+                  {copiedImages ? <Check className="w-3 h-3" /> : <Clipboard className="w-3 h-3" />}
                   {copiedImages ? 'Copied!' : 'Copy'}
                 </button>
               </div>
             </div>
 
-            <p className="text-[9.5px] text-zinc-650 font-mono text-center leading-normal uppercase pt-1">
-              Add either or both as browser sources inside OBS Studio to split features.
+            <p className="text-[9.5px] text-zinc-650 font-mono text-center leading-normal uppercase pt-1 border-t border-zinc-900">
+              Add any link as browser sources inside OBS to separate and layout elements!
             </p>
           </div>
         </section>
 
         {/* Center column live streaming simulator preview background (Span 5) */}
-        <section className="xl:col-span-5 flex flex-col bg-[#0c0c0e] h-full overflow-hidden border-r border-zinc-900">
+        <section className="xl:col-span-5 flex flex-col bg-[#0c0c0e] xl:h-full min-h-[550px] overflow-hidden border-r border-zinc-900">
           <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-900 flex justify-between items-center shrink-0">
             <div className="flex items-center gap-2">
               <Eye className="w-4 h-4 text-indigo-400" />
@@ -831,111 +903,113 @@ export default function DashboardView() {
         </section>
 
         {/* Right column: Toolbar Actions & OBS setup tutorial (Span 3) */}
-        <section className="xl:col-span-3 flex flex-col bg-zinc-950 border-l border-zinc-900 overflow-y-auto">
-          {/* Stream Trial simulator */}
-          <div className="p-4 border-b border-zinc-900 bg-zinc-950">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-indigo-400 flex items-center gap-1.5 mb-3 font-mono">
-              <Play className="w-3.5 h-3.5 text-[#7c3aed]" /> แชทบอร์ดจำลองทดสอบ
-            </h3>
-            
-            {/* Custom comment test inputs */}
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  placeholder="เขียนข้อความทดสอบลองแชท..."
-                  value={customComment}
-                  onChange={e => setCustomComment(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && simulateCustomComment()}
-                  className="flex-grow bg-zinc-900 border border-zinc-800 rounded-none px-3 py-1.5 text-xs text-white font-mono"
-                />
-                <button 
-                  onClick={simulateCustomComment}
-                  className="bg-indigo-600 hover:bg-indigo-500 font-bold font-mono uppercase px-3 py-1 text-white rounded-none text-[11px]"
-                >
-                  ส่งแชท
-                </button>
-              </div>
-
-              {/* Grid with easy preset actions */}
-              <div className="grid grid-cols-2 gap-2">
-                <button 
-                  onClick={() => simulateChat(false)}
-                  className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-zinc-900 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white transition-all text-left text-xs font-mono uppercase text-[10.5px]"
-                >
-                  <MessageSquare className="w-3.5 h-3.5 text-zinc-400 shrink-0" /> ส่งแชททั่วไป
-                </button>
-                <button 
-                  onClick={() => simulateChat(true)}
-                  className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-zinc-900 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white transition-all text-left text-xs font-mono uppercase text-[10.5px]"
-                >
-                  <Shield className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> แชทผู้คุม (Mod)
-                </button>
-                <button 
-                  onClick={simulateFollow}
-                  className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-zinc-900 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white transition-all text-left text-xs font-mono uppercase text-[10.5px]"
-                >
-                  <UserPlus className="w-3.5 h-3.5 text-indigo-400 shrink-0" /> เหตุการณ์กดตาม
-                </button>
-                <button 
-                  onClick={simulateLike}
-                  className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-zinc-900 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white transition-all text-left text-xs font-mono uppercase text-[10.5px]"
-                >
-                  <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 shrink-0" /> เหตุการณ์กดหัวใจ
-                </button>
-                <button 
-                  onClick={simulateGift}
-                  className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-amber-600/20 bg-zinc-950 text-amber-300 hover:bg-zinc-900/60 hover:text-white transition-all text-left text-xs col-span-2 text-[10.5px] font-mono uppercase tracking-tight"
-                >
-                  <Gift className="w-3.5 h-3.5 text-amber-400 shrink-0" /> จำลองส่งของขวัญ 👑
-                </button>
-                <button 
-                  onClick={simulateShare}
-                  className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-lime-600/20 bg-zinc-950 text-lime-400 hover:bg-zinc-900/60 hover:text-white transition-all text-left text-xs col-span-2 text-[10.5px] font-mono uppercase tracking-tight"
-                >
-                  <Share2 className="w-3.5 h-3.5 text-lime-450 shrink-0" /> จำลองคนแชร์ไลฟ์
-                </button>
-                <button 
-                  onClick={simulateSendImage}
-                  className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-pink-600/20 bg-zinc-950 text-pink-400 hover:bg-zinc-900/60 hover:text-white transition-all text-left text-xs col-span-2 text-[10.5px] font-mono uppercase tracking-tight"
-                >
-                  <Image className="w-3.5 h-3.5 text-pink-400 shrink-0" /> จำลองผู้ชมส่งรูปภาพ 🖼️✨
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Step-By-Step OBS setup booklet */}
-          <div className="p-5 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-[#a1a1aa] flex items-center gap-1.5 px-0.5 font-mono">
-              <HelpCircle className="w-4 h-4 text-zinc-400" /> คู่มือการตั้งค่าใน OBS Studio
-            </h3>
-
-            <div className="space-y-3.5 animate-none">
-              {[
-                { step: '1', title: 'เพิ่มแหล่งข้อมูลบราวเซอร์', text: 'ไปที่แถบแหล่งทำงานวิดเจ็ต (Sources) ใน OBS Studio แล้วคลิกที่เครื่องหมาย + และจากนั้นเลือก "Browser" วิดเจ็ต' },
-                { step: '2', title: 'วางลิงก์ข้ามระบบจัดสรร', text: 'คัดลอกลิงก์นำไปใช้จากแอปในหน้านี้ แล้วนำพาสรุปไปวางลงในช่อง URL ตั้งค่าบราว์เซอร์ของคุณ' },
-                { step: '3', title: 'ปรับแต่งสัณฐานจอแสดงแชท', text: 'การตั้งค่ากล่องหน้าจอให้กรอกความกว้าง (Width) เป็น 450 และตั้งค่าความสูง (Height) เป็น 700 (หรือปรับขนาดตามใจชอบเพื่อความสวยงาม)' },
-                { step: '4', title: 'เสร็จเรียบร้อยไร้ขอบดำ', text: 'คลิกตกลง (OK) บับเบิ้ลแชทจะขึ้นวางมุมเรียงกันทันที หากติดขอบทึบให้ปรับลบค่าสี overlay custom ภายในช่อง OBS Browser source ออก' }
-              ].map(tut => (
-                <div key={tut.step} className="flex gap-3 leading-relaxed">
-                  <div className="bg-zinc-900 text-indigo-400 rounded-none font-mono text-[10px] font-bold w-5 h-5 flex items-center justify-center shrink-0 border border-zinc-800">
-                    {tut.step}
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-mono font-bold tracking-tight text-zinc-200 mt-0.5 uppercase">{tut.title}</h4>
-                    <p className="text-[11px] text-zinc-500 mt-1 leading-normal">{tut.text}</p>
-                  </div>
+        <section className="xl:col-span-3 flex flex-col bg-zinc-950 border-l border-zinc-900 h-auto xl:h-full overflow-hidden">
+          <div className="flex-grow overflow-y-auto">
+            {/* Stream Trial simulator */}
+            <div className="p-4 border-b border-zinc-900 bg-zinc-950">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-indigo-400 flex items-center gap-1.5 mb-3 font-mono">
+                <Play className="w-3.5 h-3.5 text-[#7c3aed]" /> แชทบอร์ดจำลองทดสอบ
+              </h3>
+              
+              {/* Custom comment test inputs */}
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="เขียนข้อความทดสอบลองแชท..."
+                    value={customComment}
+                    onChange={e => setCustomComment(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && simulateCustomComment()}
+                    className="flex-grow bg-zinc-900 border border-zinc-800 rounded-none px-3 py-1.5 text-xs text-white font-mono"
+                  />
+                  <button 
+                    onClick={simulateCustomComment}
+                    className="bg-indigo-600 hover:bg-indigo-500 font-bold font-mono uppercase px-3 py-1 text-white rounded-none text-[11px]"
+                  >
+                    ส่งแชท
+                  </button>
                 </div>
-              ))}
+
+                {/* Grid with easy preset actions */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    onClick={() => simulateChat(false)}
+                    className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-zinc-900 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white transition-all text-left text-xs font-mono uppercase text-[10.5px]"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-zinc-400 shrink-0" /> ส่งแชททั่วไป
+                  </button>
+                  <button 
+                    onClick={() => simulateChat(true)}
+                    className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-zinc-900 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white transition-all text-left text-xs font-mono uppercase text-[10.5px]"
+                  >
+                    <Shield className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> แชทผู้คุม (Mod)
+                  </button>
+                  <button 
+                    onClick={simulateFollow}
+                    className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-zinc-900 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white transition-all text-left text-xs font-mono uppercase text-[10.5px]"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 text-indigo-400 shrink-0" /> เหตุการณ์กดตาม
+                  </button>
+                  <button 
+                    onClick={simulateLike}
+                    className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-zinc-900 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white transition-all text-left text-xs font-mono uppercase text-[10.5px]"
+                  >
+                    <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 shrink-0" /> เหตุการณ์กดหัวใจ
+                  </button>
+                  <button 
+                    onClick={simulateGift}
+                    className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-amber-600/20 bg-zinc-950 text-amber-300 hover:bg-zinc-900/60 hover:text-white transition-all text-left text-xs col-span-2 text-[10.5px] font-mono uppercase tracking-tight"
+                  >
+                    <Gift className="w-3.5 h-3.5 text-amber-400 shrink-0" /> จำลองส่งของขวัญ 👑
+                  </button>
+                  <button 
+                    onClick={simulateShare}
+                    className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-lime-600/20 bg-zinc-950 text-lime-400 hover:bg-zinc-900/60 hover:text-white transition-all text-left text-xs col-span-2 text-[10.5px] font-mono uppercase tracking-tight"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-lime-450 shrink-0" /> จำลองคนแชร์ไลฟ์
+                  </button>
+                  <button 
+                    onClick={simulateSendImage}
+                    className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-pink-600/20 bg-zinc-950 text-pink-400 hover:bg-zinc-900/60 hover:text-white transition-all text-left text-xs col-span-2 text-[10.5px] font-mono uppercase tracking-tight"
+                  >
+                    <Image className="w-3.5 h-3.5 text-pink-400 shrink-0" /> จำลองผู้ชมส่งรูปภาพ 🖼️✨
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Quick warn card */}
-            <div className="bg-zinc-900/30 border border-zinc-800 rounded-none p-3.5 flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-              <p className="text-[10.5px] text-zinc-450 leading-relaxed font-sans">
-                <span className="text-zinc-300 font-mono font-extrabold uppercase tracking-wide block mb-0.5">การฟื้นฟูเชื่อมต่ออัตโนมัติ</span> บราว์เซอร์ปลายทางใน OBS จะพยายามเรียกดูและเช็คพอร์ตเชื่อมต่อซ่อมแซมตัวเองโดยอัตโนมัติหากพบปัญหาติดขัดกับตัวเซิร์ฟเวอร์หลักของ IndoFinity โดยที่คุณมิต้องมารีดึงใหม่เลย!
-              </p>
+            {/* Quick Step-By-Step OBS setup booklet */}
+            <div className="p-5 space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-[#a1a1aa] flex items-center gap-1.5 px-0.5 font-mono">
+                <HelpCircle className="w-4 h-4 text-zinc-400" /> คู่มือการตั้งค่า in OBS Studio
+              </h3>
+
+              <div className="space-y-3.5 animate-none">
+                {[
+                  { step: '1', title: 'เพิ่มแหล่งข้อมูลบราวเซอร์', text: 'ไปที่แถบแหล่งทำงานวิดเจ็ต (Sources) ใน OBS Studio แล้วคลิกที่เครื่องหมาย + และจากนั้นเลือก "Browser" วิดเจ็ต' },
+                  { step: '2', title: 'วางลิงก์ข้ามระบบจัดสรร', text: 'คัดลอกลิงก์นำไปใช้จากแอปในหน้านี้ แล้วนำพาสรุปไปวางลงในช่อง URL ตั้งค่าบราว์เซอร์ของคุณ' },
+                  { step: '3', title: 'ปรับแต่งสัณฐานจอแสดงแชท', text: 'การตั้งค่ากล่องหน้าจอให้กรอกความกว้าง (Width) เป็น 450 และตั้งค่าความสูง (Height) เป็น 700 (หรือปรับขนาดตามใจชอบเพื่อความสวยงาม)' },
+                  { step: '4', title: 'เสร็จเรียบร้อยไร้ขอบดำ', text: 'คลิกตกลง (OK) บับเบิ้ลแชทจะขึ้นวางมุมเรียงกันทันที หากติดขอบทึบให้ปรับลบค่าสี overlay custom ภายในช่อง OBS Browser source ออก' }
+                ].map(tut => (
+                  <div key={tut.step} className="flex gap-3 leading-relaxed">
+                    <div className="bg-zinc-900 text-indigo-400 rounded-none font-mono text-[10px] font-bold w-5 h-5 flex items-center justify-center shrink-0 border border-zinc-800">
+                      {tut.step}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-mono font-bold tracking-tight text-zinc-200 mt-0.5 uppercase">{tut.title}</h4>
+                      <p className="text-[11px] text-zinc-500 mt-1 leading-normal">{tut.text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Quick warn card */}
+              <div className="bg-zinc-900/30 border border-zinc-800 rounded-none p-3.5 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <p className="text-[10.5px] text-zinc-450 leading-relaxed font-sans">
+                  <span className="text-zinc-300 font-mono font-extrabold uppercase tracking-wide block mb-0.5">การฟื้นฟูเชื่อมต่ออัตโนมัติ</span> บราว์เซอร์ปลายทางใน OBS จะพยายามเรียกดูและเช็คพอร์ตเชื่อมต่อซ่อมแซมตัวเองโดยอัตโนมัติหากพบปัญหาติดขัดกับตัวเซิร์ฟเวอร์หลักของ IndoFinity โดยที่คุณมิต้องมารีดึงใหม่เลย!
+                </p>
+              </div>
             </div>
           </div>
         </section>

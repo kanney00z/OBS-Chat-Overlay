@@ -227,6 +227,12 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     if (settings.mode === 'chat_alerts' && messageObj.type === 'share_image') {
       return;
     }
+    if (settings.mode === 'chat_only' && messageObj.type !== 'chat') {
+      return;
+    }
+    if (settings.mode === 'alerts_only' && (messageObj.type === 'chat' || messageObj.type === 'share_image')) {
+      return;
+    }
 
     // 1. Audit filters
     if (settings.ignoredUsers.some(user => user.toLowerCase() === newMessage.uniqueId.toLowerCase())) {
@@ -663,9 +669,10 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       )}
 
       {/* Top Center alert notifications banner overlay */}
-      <div className="absolute top-8 left-0 right-0 flex justify-center h-28 pointer-events-none z-20">
-        <AnimatePresence mode="wait">
-          {activeAlert && (
+      {settings.mode !== 'chat_only' && settings.mode !== 'images_only' && (
+        <div className="absolute top-8 left-0 right-0 flex justify-center h-28 pointer-events-none z-20">
+          <AnimatePresence mode="wait">
+            {activeAlert && (
             <motion.div
               initial={{ opacity: 0, y: -45, scale: 0.85 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -675,11 +682,15 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
               {/* Conditional Alert Visual Theme Design matches Settings */}
               {settings.theme === 'geometric' && (
                 <div className="relative bg-[#0c0c0e] border border-zinc-800 border-l-2 border-l-indigo-500 px-5 py-3.5 shadow-lg flex items-center gap-3.5 min-w-[320px] overflow-hidden">
-                  <div className="bg-zinc-900 border border-zinc-800 p-2 text-indigo-400">
-                    {activeAlert.type === 'gift' ? <Gift className="w-5 h-5 flex-shrink-0 animate-bounce" /> :
-                     activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 flex-shrink-0" /> :
-                     activeAlert.type === 'like' ? <Heart className="w-5 h-5 flex-shrink-0 fill-rose-500 text-rose-500" /> :
-                     <Share2 className="w-5 h-5 flex-shrink-0" />}
+                  <div className="bg-zinc-900 border border-zinc-800 w-10 h-10 flex-shrink-0 flex items-center justify-center text-indigo-400 overflow-hidden">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-5 h-5 flex-shrink-0 animate-bounce" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 flex-shrink-0" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-5 h-5 flex-shrink-0 fill-rose-500 text-rose-500" /> :
+                      <Share2 className="w-5 h-5 flex-shrink-0" />
+                    )}
                   </div>
                   <div>
                     <h5 className="font-mono text-zinc-400 uppercase text-[9px] tracking-widest font-extrabold">ฟีดกิจกรรมใหม่ล่าสุด</h5>
@@ -694,11 +705,15 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                 <div className="relative bg-slate-950 border-2 border-pink-500 px-6 py-4 rounded shadow-[0_0_25px_rgba(236,72,153,0.4)] flex items-center gap-4 min-w-[320px] overflow-hidden">
                   <div className="absolute -top-10 -left-10 w-24 h-24 bg-pink-500/10 rounded-full blur-2xl animate-pulse" />
                   <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-cyan-500/15 rounded-full blur-2xl animate-pulse" />
-                  <div className="relative bg-pink-500/20 p-2.5 rounded border border-pink-500/40">
-                    {activeAlert.type === 'gift' ? <Gift className="w-6 h-6 text-pink-500 flex-shrink-0" /> :
-                     activeAlert.type === 'follow' ? <UserPlus className="w-6 h-6 text-cyan-400 flex-shrink-0" /> :
-                     activeAlert.type === 'like' ? <Heart className="w-6 h-6 text-red-500 flex-shrink-0 fill-red-500" /> :
-                     <Share2 className="w-6 h-6 text-lime-400 flex-shrink-0" />}
+                  <div className="relative bg-pink-500/20 w-12 h-12 flex-shrink-0 flex items-center justify-center rounded border border-pink-500/40 overflow-hidden">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover filter brightness-110 contrast-110" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-6 h-6 text-pink-500 flex-shrink-0" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-6 h-6 text-cyan-400 flex-shrink-0" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-6 h-6 text-red-500 flex-shrink-0 fill-red-500" /> :
+                      <Share2 className="w-6 h-6 text-lime-400 flex-shrink-0" />
+                    )}
                   </div>
                   <div>
                     <h5 className="font-mono text-[#00F0FF] uppercase text-[11px] tracking-widest font-extrabold animate-pulse">ตรวจพบกิจกรรมเปิดใหม่</h5>
@@ -711,11 +726,15 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
               {settings.theme === 'glassmorphism' && (
                 <div className="bg-white/10 border border-white/20 backdrop-blur-lg px-6 py-4 rounded-2xl shadow-[0_8px_32px_0_rgba(255,255,255,0.08)] flex items-center gap-4 min-w-[320px]">
-                  <div className="bg-white/15 p-2.5 rounded-full border border-white/10 backdrop-blur-md text-white">
-                    {activeAlert.type === 'gift' ? <Gift className="w-5 h-5 flex-shrink-0" /> :
-                     activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 flex-shrink-0" /> :
-                     activeAlert.type === 'like' ? <Heart className="w-5 h-5 flex-shrink-0 fill-rose-400 text-rose-400" /> :
-                     <Share2 className="w-5 h-5 flex-shrink-0" />}
+                  <div className="bg-white/15 w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-full border border-white/10 backdrop-blur-md text-white overflow-hidden">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-5 h-5 flex-shrink-0" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 flex-shrink-0" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-5 h-5 flex-shrink-0 fill-rose-400 text-rose-400" /> :
+                      <Share2 className="w-5 h-5 flex-shrink-0" />
+                    )}
                   </div>
                   <div>
                     <p className="text-[14px] text-white">
@@ -727,11 +746,15 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
               {settings.theme === 'bubblechat' && (
                 <div className="bg-amber-400 text-slate-900 border border-amber-300 px-6 py-3.5 rounded-2xl shadow-xl flex items-center gap-4 min-w-[320px]">
-                  <div className="p-2 bg-slate-900 rounded-lg text-amber-400">
-                    {activeAlert.type === 'gift' ? <Gift className="w-5 h-5 flex-shrink-0" /> :
-                     activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 flex-shrink-0" /> :
-                     activeAlert.type === 'like' ? <Heart className="w-5 h-5 flex-shrink-0 fill-amber-400" /> :
-                     <Share2 className="w-5 h-5 flex-shrink-0" />}
+                  <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-slate-900 rounded-full text-amber-400 overflow-hidden border border-slate-950/10">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-5 h-5 flex-shrink-0" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 flex-shrink-0" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-5 h-5 flex-shrink-0 fill-amber-400" /> :
+                      <Share2 className="w-5 h-5 flex-shrink-0" />
+                    )}
                   </div>
                   <div>
                     <span className="text-[12px] font-bold text-slate-800 tracking-wider uppercase">การแจ้งเตือนสตรีมสด</span>
@@ -744,10 +767,14 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
               {settings.theme === 'minimal' && (
                 <div className="bg-black/80 backdrop-blur-md border border-neutral-700/50 px-5 py-3 rounded-lg shadow-2xl flex items-center gap-3.5 min-w-[300px]">
-                  {activeAlert.type === 'gift' ? <Gift className="w-4 h-4 text-yellow-400 flex-shrink-0" /> :
-                   activeAlert.type === 'follow' ? <UserPlus className="w-4 h-4 text-blue-400 flex-shrink-0" /> :
-                   activeAlert.type === 'like' ? <Heart className="w-4 h-4 text-green-400 flex-shrink-0" /> :
-                   <Share2 className="w-4 h-4 text-purple-400 flex-shrink-0" />}
+                  {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                    <img src={activeAlert.profilePictureUrl} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" referrerPolicy="no-referrer" />
+                  ) : (
+                    activeAlert.type === 'gift' ? <Gift className="w-4 h-4 text-yellow-400 flex-shrink-0" /> :
+                    activeAlert.type === 'follow' ? <UserPlus className="w-4 h-4 text-blue-400 flex-shrink-0" /> :
+                    activeAlert.type === 'like' ? <Heart className="w-4 h-4 text-green-400 flex-shrink-0" /> :
+                    <Share2 className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                  )}
                   <p className="text-[12px] text-white font-mono uppercase tracking-wide">
                     @{activeAlert.nickname} <span className="text-neutral-400">{activeAlert.detailText}</span>
                   </p>
@@ -756,11 +783,15 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
               {settings.theme === 'retro' && (
                 <div className="bg-slate-950 border-4 border-lime-400 px-6 py-4 rounded-none shadow-[6px_6px_0_0_rgba(0,0,0,1)] flex items-center gap-4 min-w-[320px] font-mono">
-                  <div className="bg-lime-950/20 border-2 border-lime-400 p-2 text-lime-400 animate-bounce">
-                    {activeAlert.type === 'gift' ? <Gift className="w-5 h-5" /> :
-                     activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5" /> :
-                     activeAlert.type === 'like' ? <Heart className="w-5 h-5 fill-lime-400" /> :
-                     <Share2 className="w-5 h-5" />}
+                  <div className="bg-lime-950/20 border-2 border-lime-400 w-11 h-11 flex-shrink-0 flex items-center justify-center text-lime-400 overflow-hidden">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover" style={{ imageRendering: 'pixelated' }} referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-5 h-5 animate-bounce" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-5 h-5 fill-lime-400" /> :
+                      <Share2 className="w-5 h-5" />
+                    )}
                   </div>
                   <div>
                     <h5 className="text-[10px] text-lime-400 font-extrabold uppercase animate-pulse">!ตรวจพบกิจกรรมสำเร็จ!</h5>
@@ -773,11 +804,15 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
               {settings.theme === 'twitch' && (
                 <div className="bg-[#18181b] border-l-4 border-l-purple-500 px-5 py-3.5 rounded-sm shadow-2xl flex items-center gap-3.5 min-w-[320px]">
-                  <div className="text-purple-400 bg-purple-950/30 p-2.5 rounded">
-                    {activeAlert.type === 'gift' ? <Gift className="w-4 h-4 flex-shrink-0" /> :
-                     activeAlert.type === 'follow' ? <UserPlus className="w-4 h-4 flex-shrink-0" /> :
-                     activeAlert.type === 'like' ? <Heart className="w-4 h-4 flex-shrink-0 fill-purple-400" /> :
-                     <Share2 className="w-4 h-4 flex-shrink-0" />}
+                  <div className="text-purple-400 bg-purple-950/30 w-10 h-10 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-4 h-4 flex-shrink-0" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-4 h-4 flex-shrink-0" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-4 h-4 flex-shrink-0 fill-purple-400" /> :
+                      <Share2 className="w-4 h-4 flex-shrink-0" />
+                    )}
                   </div>
                   <div>
                     <h5 className="text-[10px] text-purple-400 font-semibold tracking-wide uppercase">กิจกรรมสตรีมสด</h5>
@@ -791,6 +826,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
           )}
         </AnimatePresence>
       </div>
+      )}
 
       {/* Floating separate Shared Image notification card on the right-hand side */}
       <div className="absolute top-24 right-6 flex flex-col items-end pointer-events-none z-30 max-w-[280px]">
@@ -957,7 +993,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       </div>
 
       {/* Primary chat scroll container - bottom aligned */}
-      {settings.mode !== 'images_only' && (
+      {settings.mode !== 'images_only' && settings.mode !== 'alerts_only' && (
         <div 
           className="w-full max-w-md flex flex-col pointer-events-none self-start relative z-20 overflow-y-auto"
           style={{ fontSize: `${settings.fontSize}px`, maxHeight: '75vh' }}

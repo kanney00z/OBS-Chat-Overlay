@@ -22,7 +22,7 @@ export interface OverlaySettings {
   animationStyle: 'slide-up' | 'slide-left' | 'fade-in' | 'scale-pop';
   testChannelName: string;
   showImageAlerts?: boolean; // toggle separate image alerts tray
-  mode?: 'chat_alerts' | 'images_only' | 'all';
+  mode?: 'chat_alerts' | 'images_only' | 'chat_only' | 'alerts_only' | 'all';
 }
 
 export interface ChatMessage {
