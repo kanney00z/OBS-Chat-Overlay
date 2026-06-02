@@ -609,6 +609,66 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
           badgeText: 'text-lime-300 uppercase'
         };
 
+      case 'neon-glow':
+        return {
+          wrapper: `relative p-3.5 bg-[#0b0416]/90 mb-3 border-2 rounded-xl flex items-start gap-3 select-none ${
+            isSpecialType 
+              ? 'border-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.5)]' 
+              : isKeywordHighlighted 
+                ? 'border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)]' 
+                : 'border-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.3)]'
+          }`,
+          name: 'text-[12px] font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-400 font-mono',
+          body: 'leading-relaxed break-words w-full overflow-hidden truncate text-violet-100 font-medium',
+          badge: 'bg-fuchsia-950/50 text-[#f472b6] text-[9px] px-1.5 py-0.5 rounded-full border border-fuchsia-500/30',
+          badgeText: 'text-fuchsia-300 font-bold'
+        };
+
+      case 'kawaii':
+        return {
+          wrapper: `relative p-3.5 bg-rose-50/95 mb-3 border-[3px] border-pink-200 rounded-3xl rounded-tl-sm flex items-start gap-3 select-none shadow-[0_4px_10px_rgba(244,114,182,0.15)] ${
+            isSpecialType 
+              ? 'bg-amber-50 border-amber-200 shadow-[0_4px_10px_rgba(245,158,11,0.15)]' 
+              : isKeywordHighlighted 
+                ? 'bg-red-50 border-red-200 shadow-[0_4px_10px_rgba(239,68,68,0.15)]' 
+                : ''
+          }`,
+          name: 'text-[12.5px] font-black text-pink-500 font-sans tracking-wide',
+          body: 'leading-relaxed break-words w-full overflow-hidden truncate text-pink-900 font-semibold',
+          badge: 'bg-pink-100 text-pink-600 text-[9px] px-2 py-0.5 rounded-full font-bold border border-pink-200',
+          badgeText: 'text-pink-500 font-bold'
+        };
+
+      case 'gaming-red':
+        return {
+          wrapper: `relative p-3 bg-zinc-950 mb-2.5 border-l-[3px] border-r border-t border-b border-zinc-900 border-l-red-600 flex items-start gap-3 select-none skew-x-[-3deg] hover:border-l-red-500 transition-all ${
+            isSpecialType 
+              ? 'bg-zinc-900/40 border-l-red-500 ring-1 ring-red-500/20' 
+              : isKeywordHighlighted 
+                ? 'bg-zinc-900/60 border-l-rose-500 ring-1 ring-rose-500/30' 
+                : ''
+          }`,
+          name: 'text-[11.5px] font-bold uppercase tracking-widest text-red-500 font-mono',
+          body: 'leading-normal break-words w-full overflow-hidden truncate text-zinc-100 font-mono uppercase tracking-tight',
+          badge: 'bg-red-950/45 text-red-400 text-[8.5px] px-1 py-0.5 rounded-none font-mono font-bold border border-red-900/50',
+          badgeText: 'text-red-400'
+        };
+
+      case 'royal-gold':
+        return {
+          wrapper: `relative p-3.5 bg-neutral-950 mb-3 border border-amber-500/30 border-l-[3px] border-l-amber-500 rounded-lg flex items-start gap-3 select-none shadow-[0_5px_15px_rgba(217,119,6,0.1)] ${
+            isSpecialType 
+              ? 'border-amber-400/50 bg-neutral-900 shadow-[0_5px_15px_rgba(245,158,11,0.15)]' 
+              : isKeywordHighlighted 
+                ? 'border-yellow-400/65 bg-[#17130a] shadow-[0_5px_15px_rgba(234,179,8,0.2)]' 
+                : ''
+          }`,
+          name: 'text-[12.5px] font-bold tracking-tight text-amber-500 font-serif',
+          body: 'leading-relaxed break-words w-full overflow-hidden truncate text-amber-100 font-medium font-sans',
+          badge: 'bg-amber-950/40 text-amber-400 text-[9px] px-1.5 py-0.5 rounded font-serif font-bold border border-amber-500/20',
+          badgeText: 'text-amber-350'
+        };
+
       case 'twitch':
       default:
         return {
@@ -802,6 +862,93 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                 </div>
               )}
 
+              {settings.theme === 'neon-glow' && (
+                <div className="relative bg-[#0b0416] border-2 border-fuchsia-500 px-6 py-4 rounded-xl shadow-[0_0_20px_rgba(217,70,239,0.4)] flex items-center gap-4 min-w-[320px] overflow-hidden">
+                  <div className="absolute -top-10 -left-10 w-24 h-24 bg-fuchsia-500/10 rounded-full blur-2xl animate-pulse" />
+                  <div className="relative bg-fuchsia-950/45 border border-fuchsia-500/30 w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-full overflow-hidden text-transparent bg-clip-border">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-fuchsia-400 animate-bounce" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-cyan-400" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-5 h-5 text-rose-500 fill-rose-500" /> :
+                      <Share2 className="w-5 h-5 text-purple-400" />
+                    )}
+                  </div>
+                  <div>
+                    <h5 className="font-mono text-cyan-400 uppercase text-[10px] tracking-wider font-extrabold flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-fuchsia-400 animate-spin" /> NEW SYNTH EVENT
+                    </h5>
+                    <p className="font-sans text-[13.5px] text-white font-semibold mt-0.5">
+                      <strong className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-400 font-bold">@{activeAlert.nickname}</strong> {activeAlert.detailText}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'kawaii' && (
+                <div className="relative bg-rose-50 text-pink-700 border-[3px] border-pink-200 px-6 py-3.5 rounded-3xl shadow-[0_8px_20px_rgba(244,114,182,0.2)] flex items-center gap-4 min-w-[320px]">
+                  <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-pink-100 rounded-full text-pink-500 overflow-hidden border border-pink-200">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-pink-400 animate-bounce" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-pink-500" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-5 h-5 fill-rose-400 text-rose-400" /> :
+                      <Share2 className="w-5 h-5 text-pink-500" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black tracking-wider uppercase text-pink-400 font-sans block">✨ กิจกรรมน่ายักกก ✨</span>
+                    <p className="text-[13.5px] font-bold text-pink-900 mt-0.5 animate-bounce">
+                      <strong>@{activeAlert.nickname}</strong> {activeAlert.detailText}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'gaming-red' && (
+                <div className="relative bg-zinc-950 border-r-2 border-b-2 border-zinc-900 border-l-[4px] border-l-red-600 px-6 py-4 shadow-2xl flex items-center gap-4 min-w-[320px] skew-x-[-3deg] overflow-hidden">
+                  <div className="bg-zinc-900 border border-zinc-800 w-11 h-11 flex-shrink-0 flex items-center justify-center text-red-500 overflow-hidden">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-red-500 animate-bounce" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-red-400" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-5 h-5 text-red-500 fill-red-500" /> :
+                      <Share2 className="w-5 h-5 text-red-500" />
+                    )}
+                  </div>
+                  <div>
+                    <h5 className="font-mono text-red-400 uppercase text-[10px] tracking-widest font-extrabold">LIVE COMBAT EVENT</h5>
+                    <p className="font-mono text-[13px] text-white font-bold uppercase mt-0.5">
+                      <strong className="text-red-500">@{activeAlert.nickname}</strong> {activeAlert.detailText}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'royal-gold' && (
+                <div className="relative bg-neutral-950 border border-amber-500/30 border-l-[3px] border-l-amber-500 px-6 py-4 rounded-lg shadow-2xl flex items-center gap-4 min-w-[320px] overflow-hidden">
+                  <div className="bg-neutral-900 border border-amber-500/20 w-11 h-11 flex-shrink-0 flex items-center justify-center text-amber-400 overflow-hidden rounded-md">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-amber-500 animate-bounce" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-amber-400" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-5 h-5 fill-amber-500 text-amber-500" /> :
+                      <Share2 className="w-5 h-5 text-amber-400" />
+                    )}
+                  </div>
+                  <div>
+                    <h5 className="font-serif text-amber-550 uppercase text-[9.5px] tracking-widest font-bold">ROYAL STREAM TRIBUTES</h5>
+                    <p className="font-sans text-[13.5px] text-amber-50 mt-1">
+                      <strong className="text-amber-400 font-bold font-serif">@{activeAlert.nickname}</strong> {activeAlert.detailText}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {settings.theme === 'twitch' && (
                 <div className="bg-[#18181b] border-l-4 border-l-purple-500 px-5 py-3.5 rounded-sm shadow-2xl flex items-center gap-3.5 min-w-[320px]">
                   <div className="text-purple-400 bg-purple-950/30 w-10 h-10 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
@@ -963,6 +1110,94 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       </p>
                     )}
                   </div>
+                </div>
+              )}
+
+              {settings.theme === 'neon-glow' && (
+                <div className="relative bg-[#0b0416]/95 border-2 border-fuchsia-500 p-4 rounded-xl shadow-[0_0_20px_rgba(217,70,239,0.35)] flex flex-col gap-3 w-[260px] overflow-hidden">
+                  <div className="flex items-center justify-between text-cyan-400 font-mono text-[9px] uppercase font-bold tracking-widest border-b border-fuchsia-500/25 pb-1.5 animate-pulse">
+                    <span className="flex items-center gap-1">
+                      <Camera className="w-3.5 h-3.5" /> DETECTING GLOW PHOTO
+                    </span>
+                    <span className="text-fuchsia-400">ONLINE</span>
+                  </div>
+                  <div className="relative rounded bg-slate-950 aspect-video overflow-hidden border border-fuchsia-500/20 shadow-md">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="font-mono text-[11.5px] font-extrabold text-fuchsia-400 block truncate">@{imageShareAlert.nickname}</span>
+                    {imageShareAlert.comment && (
+                      <p className="font-sans text-[11px] leading-snug text-violet-100 italic truncate">
+                        "{imageShareAlert.comment}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'kawaii' && (
+                <div className="bg-rose-50 border-[3px] border-pink-200 p-4 rounded-3xl shadow-[0_8px_20px_rgba(244,114,182,0.15)] flex flex-col gap-2.5 w-[250px]">
+                  <div className="flex items-center gap-2 border-b border-pink-100 pb-2">
+                    <div className="bg-pink-100 p-1 rounded-full text-pink-500">
+                      <Sparkles className="w-3.5 h-3.5 text-pink-500 shrink-0" />
+                    </div>
+                    <div>
+                      <h5 className="font-black text-[12px] text-pink-500">รูปน่ายักที่แชร์มา</h5>
+                      <span className="text-[10px] text-pink-400 font-bold block">by @{imageShareAlert.nickname}</span>
+                    </div>
+                  </div>
+                  <div className="relative rounded-2xl overflow-hidden aspect-video bg-pink-100 border-2 border-pink-200">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  {imageShareAlert.comment && (
+                    <p className="text-[11px] text-pink-850 leading-normal italic px-1 truncate">
+                      "{imageShareAlert.comment}"
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {settings.theme === 'gaming-red' && (
+                <div className="relative bg-zinc-950 border-r-2 border-b-2 border-zinc-900 border-l-[3px] border-l-red-600 p-4 shadow-2xl flex flex-col gap-3 w-[260px] skew-x-[-3deg] overflow-hidden">
+                  <div className="flex items-center justify-between text-red-500 font-mono text-[9px] uppercase font-bold tracking-widest border-b border-zinc-900 pb-1.5">
+                    <span className="flex items-center gap-1 font-extrabold">
+                      <Camera className="w-3.5 h-3.5 animate-pulse" /> INCOMING WEBCAM
+                    </span>
+                    <span className="bg-red-950 border border-red-500/40 text-red-400 px-1 py-0.5 text-[7.5px] font-bold">LIVE</span>
+                  </div>
+                  <div className="relative border border-zinc-850 bg-black aspect-video overflow-hidden">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="font-mono text-[11px] font-bold text-red-500 block truncate">@{imageShareAlert.nickname.toUpperCase()}</span>
+                    {imageShareAlert.comment && (
+                      <p className="font-mono text-[10.5px] text-zinc-400 leading-snug uppercase truncate">
+                        &gt;&gt; {imageShareAlert.comment}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'royal-gold' && (
+                <div className="relative bg-neutral-950 border border-amber-500/30 border-l-[3px] border-l-amber-500 p-4 rounded-lg shadow-2xl flex flex-col gap-3 w-[260px] overflow-hidden">
+                  <div className="flex items-center gap-2 text-amber-400/90 border-b border-amber-500/15 pb-2">
+                    <div className="bg-amber-950/30 p-1.5 rounded text-amber-500 border border-amber-500/20">
+                      <Camera className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <h5 className="font-serif text-[11px] text-amber-400 font-bold uppercase tracking-wider">Shared Masterpiece</h5>
+                      <span className="text-[9.5px] text-amber-300/60 block font-sans">Present by @{imageShareAlert.nickname}</span>
+                    </div>
+                  </div>
+                  <div className="relative rounded-md overflow-hidden aspect-video bg-black/60 border border-amber-500/20">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  {imageShareAlert.comment && (
+                    <p className="text-[11px] text-amber-100 font-sans italic truncate">
+                      "{imageShareAlert.comment}"
+                    </p>
+                  )}
                 </div>
               )}
 
