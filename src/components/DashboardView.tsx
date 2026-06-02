@@ -6,41 +6,176 @@
 import { useState, useEffect } from 'react';
 import { 
   Settings, Sliders, Play, Laptop, Clipboard, Check, HelpCircle, 
-  MessageSquare, Heart, Gift, UserPlus, Share2, Shield, Eye, Volume2, 
-  VolumeX, RefreshCw, Sparkles, AlertCircle, Trash2, ArrowRight, Video, ListFilter, Image
+  MessageSquare, Heart, Gift, UserPlus, Share2, Shield, Eye, EyeOff, Volume2, 
+  VolumeX, RefreshCw, Sparkles, AlertCircle, Trash2, ArrowRight, Video, ListFilter, Image,
+  Users, Trash, Crown
 } from 'lucide-react';
 import { OverlaySettings, OverlayTheme, ChatMessage } from '../types';
 import OverlayView from './OverlayView';
+import VectorAvatar from './VectorAvatar';
+
+const PRESET_AVATARS = [
+  { id: 'av_katak', name: 'Katak Ungu Putih (กบม่วงขาวอภิสิทธิ์)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdjYxZDF6bzU2MmhkMDY1dmhwdTF5ZXByMnBtNTVlZG51MzhmeTF1bCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/X3bZfO1fA9OOk/giphy.gif', scale: 1.1, premium: true },
+  { id: 'av_c39', name: 'Cartoon 39 (พาสึกระโหลกคราม)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZTA4ZXpzem1nYTcweGFvNXJzNWZjcW8wdzM5YnYxeWxhN3J6cnlueCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/K7I7f4D2H23s8V6UeZ/giphy.gif', scale: 1.25, premium: true },
+  { id: 'av_c38', name: 'Cartoon 38 (อัศวินเขาปีศาจแดง)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbHhwdWtwZmR2Z25uMTNmaXFpdmNoMncwNGxpaDlxMnltajRzdmoydSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/rX7Xto0gW9GgS3mHjR/giphy.gif', scale: 1.2, premium: true },
+  { id: 'av_c37', name: 'Cartoon 37 (นินจาชุดฟ้าพลังเวทย์)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbTZreHN2bXg2cmJhZHFhYnRjNXg1azlyZXhwbGRpajgwcG1yeXh2NyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/v3K3Wb9SArQfL8f9Xz/giphy.gif', scale: 1.15, premium: true },
+  { id: 'av_c36', name: 'Cartoon 36 (หนุ่มแก็ปผจญภัย)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMDVjY3JzajhxYThqYnpqbDloZmdpdXBncnk4a243dThreG5uNGptMyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/B0tXe11K0D5MlwC7Yd/giphy.gif', scale: 1.1, premium: true },
+  { id: 'av_c35', name: 'Cartoon 35 (เชฟจิ๋วขี้โมโห)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmt6czVpYWNjbnEyaGdyNXN0ZWwybm4yc3drZHBrZ3Y5d2psMGlyZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/Stf3I35y7yC0bA88A4/giphy.gif', scale: 1.15, premium: true },
+  { id: 'av_c34', name: 'Cartoon 34 (นินจากระโดดวายุ)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3p4dXVsdHVzd2dxcDJyeHpmenRzdTB3ZXhheXR2cXZqMXpjczg4YiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/gQRrxoX01JNjW/giphy.gif', scale: 1.2, premium: true },
+  { id: 'av_c33', name: 'Cartoon 33 (ตัวตลกสายฮาพิกเซล)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbWJpMXM3bmRxMmNxdDNoejMxbzVxZXR4Zm8xd2E0MTF3MGF1cnlpdCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/Wf0G9vH7788P7uof5B/giphy.gif', scale: 1.1, premium: true },
+  { id: 'av_c32', name: 'Cartoon 32 (จอมยุทธ์หน้ากากทอง)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOWdvdGZ5dnA4ejN3NjAyamVsc3NoZTNnaTNreml6dWphMmVhbGVrYiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/9t7q2V6Y9Ylqf8pD/giphy.gif', scale: 1.15, premium: true },
+  { id: 'av_c30', name: 'Cartoon 30 (เอลฟ์ผู้พิทักษ์ป่า)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdnd2NzBzN3F4dHBycWdwOGg4d3N4enEwaTR4d3gyOXhmdjBtc29yZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/p6K078jR4lWpP0mXm9/giphy.gif', scale: 1.1, premium: true },
+  { id: 'av_c29', name: 'Cartoon 29 (หนูหมวกแมวสุดซ่า)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3h2cjhsMzQ3NHp1dGl0eDRoNzM5N2gwdDF4MG8zNTB5cTRrcjRkdiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/mB9v7q2V6Y9Ylqf8pD/giphy.gif', scale: 1.2, premium: true },
+  { id: 'av_c21', name: 'Cartoon 21 (จอมเวทย์เสื้อคลุมม่วง)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnZndWUzOGdveDVkaHMyMWF3aGtwMWpzbTRtcTloNDBvd3B0OWpxciZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/8m4R3Y9F83Fi79U93R/giphy.gif', scale: 1.25, premium: true },
+  { id: 'av_c15', name: 'Cartoon 15 (สไลม์นักรบสีชมพู)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTlkMHltNjFrM3IwbWdtNGUzbHFuNWE5bWtsbzd0NGpsNmpudmJrNiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/v8S7f8pIpxNfB84Bst/giphy.gif', scale: 1.1, premium: true },
+  { id: 'av_c14', name: 'Cartoon 14 (วิญญาณสวมหมวกไหมพรม)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3N5b2dwNnY4Zmp2ODg3c25tdTZubDBsbWNrcm81N3pwanJhNTlkayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/L33yPCtQCr48yOtbO4/giphy.gif', scale: 1.1, premium: true },
+  { id: 'av_c2', name: 'Cartoon 2 (สุนัขจิ้งจอกนักซิ่ง)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeWZvdDV2MTYyYW8wODBpaXJ3dzNhZmdtZzh6dmowMTdtN2NiaHJ6MCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/X83uO7S2xZkFfE2m6I/giphy.gif', scale: 1.15, premium: true },
+  { id: 'av_c1', name: 'Cartoon 1 (นินจาสายลมเงาหมอก)', spriteUrl: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmt6czVpYWNjbnEyaGdyNXN0ZWwybm4yc3drZHBrZ3Y5d2psMGlyZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/u0S2bXpE0vH2r5M17W/giphy.gif', scale: 1.1, premium: true }
+];
+
+const VECTOR_PRESET_AVATARS = [
+  { id: 'vec_slime', name: 'สไลม์เจลลี่ดึ๋งดั๋ง (Pink Jelly Slime)', spriteUrl: 'vector:slime', scale: 1.15, premium: true },
+  { id: 'vec_robot', name: 'หุ่นยนต์ไซเบอร์บอท (Cyber Robot LED)', spriteUrl: 'vector:robot', scale: 1.15, premium: true },
+  { id: 'vec_ninja', name: 'นินจาเงาวายุสะกดชีพ (Shadow Ninja Cyan)', spriteUrl: 'vector:ninja', scale: 1.15, premium: true },
+  { id: 'vec_kitten', name: 'ลูกแมวเหมียวสามสีแสนซน (Playful Kitten)', spriteUrl: 'vector:kitten', scale: 1.15, premium: true },
+  { id: 'vec_wizard', name: 'จอมเวทมนตร์อวตาร (Arcane Wizard staff)', spriteUrl: 'vector:wizard', scale: 1.1, premium: true },
+  { id: 'vec_ghost', name: 'ผีวิญญาณน้อยขี้อ้อน (Sweet Ghost wave)', spriteUrl: 'vector:ghost', scale: 1.15, premium: true }
+];
+
+const DEFAULT_AVATARS = [
+  ...VECTOR_PRESET_AVATARS,
+  ...PRESET_AVATARS.slice(0, 4)
+];
 
 export default function DashboardView() {
-  const [settings, setSettings] = useState<OverlaySettings>({
-    wsUrl: 'ws://localhost:62024',
-    theme: 'geometric',
-    fontSize: 16,
-    maxMessages: 10,
-    messageLifetime: 20,
-    showAvatars: true,
-    showBadges: true,
-    alertSounds: true,
-    textToSpeech: false,
-    ttsVoiceRate: 1.0,
-    ttsVoicePitch: 1.0,
-    highlightKeywords: ['obs', 'indofinity', 'stream', 'highlight'],
-    ignoredUsers: [],
-    animationStyle: 'slide-up',
-    testChannelName: 'IndoFinity Streamer',
-    showImageAlerts: true
+  const [settings, setSettings] = useState<OverlaySettings>(() => {
+    const saved = localStorage.getItem('obs_overlay_settings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          wsUrl: 'ws://localhost:62024',
+          theme: 'geometric',
+          fontSize: 16,
+          maxMessages: 10,
+          messageLifetime: 20,
+          showAvatars: true,
+          showBadges: true,
+          alertSounds: true,
+          textToSpeech: false,
+          ttsVoiceRate: 1.0,
+          ttsVoicePitch: 1.0,
+          highlightKeywords: ['obs', 'indofinity', 'stream', 'highlight'],
+          ignoredUsers: [],
+          animationStyle: 'slide-up',
+          testChannelName: 'IndoFinity Streamer',
+          showImageAlerts: true,
+          customAvatars: DEFAULT_AVATARS,
+          vectorAvatarSpeed: 1.0,
+          hideAvatarsWhenNoViewers: false,
+          testViewerCount: 1,
+          ...parsed
+        };
+      } catch (e) {
+        // Fallback below
+      }
+    }
+    return {
+      wsUrl: 'ws://localhost:62024',
+      theme: 'geometric',
+      fontSize: 16,
+      maxMessages: 10,
+      messageLifetime: 20,
+      showAvatars: true,
+      showBadges: true,
+      alertSounds: true,
+      textToSpeech: false,
+      ttsVoiceRate: 1.0,
+      ttsVoicePitch: 1.0,
+      highlightKeywords: ['obs', 'indofinity', 'stream', 'highlight'],
+      ignoredUsers: [],
+      animationStyle: 'slide-up',
+      testChannelName: 'IndoFinity Streamer',
+      showImageAlerts: true,
+      customAvatars: DEFAULT_AVATARS,
+      vectorAvatarSpeed: 1.0,
+      hideAvatarsWhenNoViewers: false,
+      testViewerCount: 1
+    };
   });
+
+  // Track settings changes in real-time and save to localStorage
+  useEffect(() => {
+    localStorage.setItem('obs_overlay_settings', JSON.stringify(settings));
+  }, [settings]);
+
+  // Handle URL synchronizing, so even if the browser is reloaded or links generated, they stay synchronized
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasOverlay = searchParams.get('overlay') === 'true';
+    if (!hasOverlay) {
+      // If we are in DashboardView, check if there are custom config state parameters
+      // (This updates states if the user comes back with pre-saved/bookmarked options)
+      const themeParam = searchParams.get('theme');
+      if (themeParam && themeParam !== settings.theme) {
+        setSettings(prev => ({
+          ...prev,
+          theme: themeParam as any
+        }));
+      }
+    }
+  }, []);
 
   const [copiedChat, setCopiedChat] = useState(false);
   const [copiedChatOnly, setCopiedChatOnly] = useState(false);
   const [copiedAlertsOnly, setCopiedAlertsOnly] = useState(false);
   const [copiedImages, setCopiedImages] = useState(false);
+  const [copiedAvatars, setCopiedAvatars] = useState(false);
   const [backgroundType, setBackgroundType] = useState<'checkerboard' | 'game' | 'dark' | 'green'>('game');
   const [customComment, setCustomComment] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
   const [ignoreInput, setIgnoreInput] = useState('');
-  const [activeTab, setActiveTab] = useState<'general' | 'design' | 'audio' | 'filter'>('general');
+  
+  // Custom states for adding own avatars
+  const [newAvatarName, setNewAvatarName] = useState('');
+  const [newAvatarUrl, setNewAvatarUrl] = useState('');
+  const [newAvatarScale, setNewAvatarScale] = useState(1.0);
+  
+  const [activeTab, setActiveTab] = useState<'general' | 'design' | 'avatars' | 'audio' | 'filter'>('general');
+  const [marketplaceTab, setMarketplaceTab] = useState<'vector' | 'classic'>('vector');
+
+  const addCustomAvatar = (name: string, spriteUrl: string, scale: number) => {
+    if (!name.trim() || !spriteUrl.trim()) return;
+    const newAvatar = {
+      id: Math.random().toString(36).substring(2, 9),
+      name: name.trim(),
+      spriteUrl: spriteUrl.trim(),
+      scale: numberValue(scale, 1.0)
+    };
+    setSettings(prev => ({
+      ...prev,
+      customAvatars: [...(prev.customAvatars || DEFAULT_AVATARS), newAvatar]
+    }));
+  };
+
+  const deleteCustomAvatar = (id: string) => {
+    setSettings(prev => ({
+      ...prev,
+      customAvatars: (prev.customAvatars || DEFAULT_AVATARS).filter(av => av.id !== id)
+    }));
+  };
+
+  const resetCustomAvatars = () => {
+    setSettings(prev => ({
+      ...prev,
+      customAvatars: DEFAULT_AVATARS
+    }));
+  };
+
+  const numberValue = (val: any, fallback: number): number => {
+    const parsed = parseFloat(val);
+    return isNaN(parsed) ? fallback : parsed;
+  };
 
   // Multi-lingual stream simulation payloads
   const mockComments = [
@@ -70,7 +205,7 @@ export default function DashboardView() {
   ];
 
   // Helper to build a clean overlay URL with custom override parameter
-  const buildOverlayUrl = (mode: 'chat_alerts' | 'images_only' | 'chat_only' | 'alerts_only') => {
+  const buildOverlayUrl = (mode: 'chat_alerts' | 'images_only' | 'chat_only' | 'alerts_only' | 'avatars') => {
     const base = window.location.origin;
     const params = new URLSearchParams();
     
@@ -89,6 +224,9 @@ export default function DashboardView() {
     params.set('ttsVoicePitch', settings.ttsVoicePitch.toString());
     params.set('animationStyle', settings.animationStyle);
     params.set('showImageAlerts', (settings.showImageAlerts !== false).toString());
+    params.set('vectorAvatarSpeed', (settings.vectorAvatarSpeed ?? 1.0).toString());
+    params.set('hideAvatarsWhenNoViewers', (settings.hideAvatarsWhenNoViewers ?? false).toString());
+    params.set('testViewerCount', (settings.testViewerCount ?? 1).toString());
     
     if (settings.highlightKeywords.length > 0) {
       params.set('highlightKeywords', settings.highlightKeywords.join(','));
@@ -104,6 +242,7 @@ export default function DashboardView() {
   const chatOnlyOverlayUrl = buildOverlayUrl('chat_only');
   const alertsOnlyOverlayUrl = buildOverlayUrl('alerts_only');
   const imagesOnlyOverlayUrl = buildOverlayUrl('images_only');
+  const avatarsOnlyOverlayUrl = buildOverlayUrl('avatars');
 
   const copyChatToClipboard = () => {
     navigator.clipboard.writeText(chatAlertsOverlayUrl);
@@ -127,6 +266,12 @@ export default function DashboardView() {
     navigator.clipboard.writeText(imagesOnlyOverlayUrl);
     setCopiedImages(true);
     setTimeout(() => setCopiedImages(false), 3000);
+  };
+
+  const copyAvatarsToClipboard = () => {
+    navigator.clipboard.writeText(avatarsOnlyOverlayUrl);
+    setCopiedAvatars(true);
+    setTimeout(() => setCopiedAvatars(false), 3000);
   };
 
   // Chat Simulator Trigger functions sending events via browser dispatch listeners
@@ -342,6 +487,14 @@ export default function DashboardView() {
               <Sliders className="w-3.5 h-3.5" /> ธีมแสดงแชท
             </button>
             <button 
+              onClick={() => setActiveTab('avatars')}
+              className={`flex-grow py-3 text-center border-b-2 items-center justify-center gap-1.5 flex transition-all ${
+                activeTab === 'avatars' ? 'border-pink-500 text-white bg-zinc-900/40' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5 text-pink-450" /> ตั้งค่าอวตาร (NEW)
+            </button>
+            <button 
               onClick={() => setActiveTab('audio')}
               className={`flex-grow py-3 text-center border-b-2 items-center justify-center gap-1.5 flex transition-all ${
                 activeTab === 'audio' ? 'border-amber-500 text-white bg-zinc-900/40' : 'border-transparent text-zinc-500 hover:text-zinc-300'
@@ -527,6 +680,367 @@ export default function DashboardView() {
                       </button>
                     ))}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* STREAM AVATARS SETTINGS TAB */}
+            {activeTab === 'avatars' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xs font-bold tracking-widest uppercase text-indigo-400 font-mono flex items-center gap-2">
+                    <Users className="w-4 h-4 text-pink-500" /> ตั้งค่าเบราว์เซอร์ซอร์สระบบอวตาร (Stream Avatars)
+                  </h3>
+                  <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                    เพิ่มความน่ารักให้หน้าจอไลฟ์สตรีมของคุณ! ตัวละครจะเดินไปมารอบๆ ฝั่งล่างของจอ และเมื่อมีคนพิมพ์แชทเข้ามาในไลฟ์ จะมีฟองคำพูดแชทลอยอยู่บนหัวตัวละครอวตารผู้พิมพ์นั้นทันที!
+                  </p>
+                </div>
+
+                {/* Vector Avatar Movement Speed Settings Option */}
+                <div className="p-4 bg-zinc-900/40 border border-zinc-850 space-y-4 rounded-none">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-pink-400 animate-pulse" />
+                    <h4 className="text-xs font-bold font-mono text-zinc-200 uppercase tracking-wide">
+                      ตั้งค่าความเร็วของแบบเวกเตอร์ขยับได้ (Vector Avatar Speed Controls)
+                    </h4>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs font-mono font-bold">
+                      <span className="text-zinc-400 uppercase text-[10px]">ปรับแต่งความเร็วเดิน/วิ่งสัญจร</span>
+                      <span className="text-pink-400 font-extrabold text-[12px] bg-pink-500/10 px-2 py-0.5 rounded border border-pink-500/20">
+                        x{(settings.vectorAvatarSpeed ?? 1.0).toFixed(1)} 
+                        {settings.vectorAvatarSpeed === 1.0 && " (ปกติ)"}
+                        {(settings.vectorAvatarSpeed ?? 1.0) < 0.6 && " (เดินน่ารักเรียบร้อย/ช้าลง)"}
+                        {(settings.vectorAvatarSpeed ?? 1.0) > 1.8 && " (วิ่งรวดเร็วกระฉับกระเฉง)"}
+                      </span>
+                    </div>
+                    
+                    <input 
+                      type="range"
+                      min="0.1" 
+                      max="2.5" 
+                      step="0.1"
+                      value={settings.vectorAvatarSpeed ?? 1.0}
+                      onChange={e => setSettings(prev => ({ ...prev, vectorAvatarSpeed: parseFloat(e.target.value) }))}
+                      className="w-full accent-pink-500 h-1.5 bg-zinc-850 appearance-none cursor-pointer rounded-none"
+                    />
+                    
+                    <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
+                      <span>🚶‍♂️ ช้าลงมาก (0.1x)</span>
+                      <span>🏃‍♂️ ความเร็วปกติ (1.0x)</span>
+                      <span>🚀 ซิ่งไวสะท้านสตรีม (2.5x)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Auto-Hide when no viewers settings option */}
+                <div className="p-4 bg-zinc-900/40 border border-zinc-850 space-y-4 rounded-none">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <EyeOff className="w-4 h-4 text-pink-400" />
+                      <div>
+                        <h4 className="text-xs font-bold font-mono text-zinc-200 uppercase tracking-wide">
+                          ระบบซ่อนตัวอวตารอัจฉริยะเมื่อไม่มีคนดู (Smart Avatar Auto-Hide Controls)
+                        </h4>
+                        <p className="text-[10px] text-zinc-500 font-sans mt-0.5 leading-snug">
+                          เมื่อเปิดใช้งาน ตัวละครอวตารทั้งหมดจะซ่อนตัวอย่างนุ่มนวลเมื่อไม่มีคนดูเพื่อไม่ให้บังส่วนสำคัญของวิดีโอค้างไว้
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setSettings(prev => ({ ...prev, hideAvatarsWhenNoViewers: !prev.hideAvatarsWhenNoViewers }))}
+                      className={`w-10 h-5.5 rounded-none flex items-center p-1 cursor-pointer transition-colors ${
+                        settings.hideAvatarsWhenNoViewers ? 'bg-pink-500 justify-end' : 'bg-zinc-800 justify-start'
+                      }`}
+                    >
+                      <span className="w-3.5 h-3.5 bg-white" />
+                    </button>
+                  </div>
+
+                  {/* Simulated testing slider */}
+                  <div className="border-t border-zinc-850 pt-3 space-y-2">
+                    <div className="flex justify-between items-center text-xs font-mono font-bold">
+                      <span className="text-zinc-400 uppercase text-[10px] flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-zinc-400" /> จำลองยอดผู้ชมสดบนแดชบอร์ด (Simulate Live Viewers)
+                      </span>
+                      <span className={`font-extrabold text-[12px] px-2 py-0.5 rounded border ${
+                        (settings.testViewerCount ?? 1) === 0 
+                          ? 'text-zinc-500 bg-zinc-500/10 border-zinc-500/20' 
+                          : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                      }`}>
+                        {(settings.testViewerCount ?? 1)} คน
+                        {(settings.testViewerCount ?? 1) === 0 && " (💤 ปล่อยว่าง/ไม่มีผู้ชม)"}
+                        {(settings.testViewerCount ?? 1) > 0 && " (🔥 กำลังดูสตรีมสด)"}
+                      </span>
+                    </div>
+
+                    <input 
+                      type="range"
+                      min="0" 
+                      max="15" 
+                      step="1"
+                      value={settings.testViewerCount ?? 1}
+                      onChange={e => setSettings(prev => ({ ...prev, testViewerCount: parseInt(e.target.value) }))}
+                      className="w-full accent-pink-500 h-1.5 bg-zinc-850 appearance-none cursor-pointer rounded-none"
+                    />
+
+                    <div className="flex justify-between text-[9px] text-zinc-500 font-mono">
+                      <span>💤 ไม่มีคนดู (0 คน)</span>
+                      <span>👥 สตรีมสบายๆ (5-10 คน)</span>
+                      <span>🎉 ไลฟ์ระเบิดความมันส์ (15 คน)</span>
+                    </div>
+
+                    {settings.hideAvatarsWhenNoViewers && (settings.testViewerCount ?? 1) === 0 && (
+                      <div className="mt-2 text-[10px] text-pink-400 font-mono flex items-center gap-1.5 bg-pink-500/5 border border-pink-500/10 p-2">
+                        <span className="inline-block w-2 h-2 bg-pink-500 rounded-full animate-ping" />
+                        สถานะตอนนี้: ตัวละครอวตารสไลด์ลงและหายไปจากจอสตรีมเรียบร้อย! (เลื่อนแถบเพื่อเรียกผู้ชมขึ้นมาใหม่)
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quick select presets matching Stream Avatars marketplace layout */}
+                <div className="p-4 bg-zinc-950/70 border border-zinc-850">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-zinc-150 uppercase font-mono flex items-center gap-1.5">
+                        <Crown className="w-4 h-4 text-amber-500 animate-pulse" /> ตลาดอวตารนักสัญจร (STREAM AVATARS MARKETPLACE)
+                      </h4>
+                      <p className="text-[10px] text-zinc-500 font-sans mt-0.5">
+                        เลือกอวตารนำเข้าจอไลฟ์สตรีมของคุณ ตกแต่งให้น่ารักสะดุดตา (กด <span className="text-pink-400 font-mono font-bold">+ Add</span> เพื่อเพิ่มเข้าสตรีมคุณ!)
+                      </p>
+                    </div>
+                    <span className="text-[9px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 uppercase font-mono shrink-0 rounded">
+                      ✨ PREMIUM UNLOCKED
+                    </span>
+                  </div>
+
+                  {/* Switcher tabs for marketplace types */}
+                  <div className="flex border-b border-zinc-850 gap-1.5 mb-4 mt-1">
+                    <button
+                      onClick={() => setMarketplaceTab('vector')}
+                      className={`px-3 py-1.5 text-[11px] font-mono font-bold uppercase transition-all border-b-2 flex items-center gap-1.5 cursor-pointer ${
+                        marketplaceTab === 'vector'
+                          ? 'border-b-pink-500 text-pink-400 bg-zinc-900/40 font-extrabold'
+                          : 'border-b-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/10'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-pink-400" /> 👾 แบบเวกเตอร์ขยับได้ (ไม่ต้องใช้รูปภาพ - คมชัดมาก)
+                    </button>
+                    <button
+                      onClick={() => setMarketplaceTab('classic')}
+                      className={`px-3 py-1.5 text-[11px] font-mono font-bold uppercase transition-all border-b-2 flex items-center gap-1.5 cursor-pointer ${
+                        marketplaceTab === 'classic'
+                          ? 'border-b-pink-500 text-pink-400 bg-zinc-900/40 font-extrabold'
+                          : 'border-b-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/10'
+                      }`}
+                    >
+                      <Crown className="w-3.5 h-3.5 text-amber-500" /> 🖼️ แบบมีรูปภาพดั้งเดิม (รูปภาพอนิเมชัน GIF)
+                    </button>
+                  </div>
+
+                  {/* Marketplace Grid mirroring the user's attachment exactly */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 font-sans max-h-[480px] overflow-y-auto pr-1">
+                    {(marketplaceTab === 'vector' ? VECTOR_PRESET_AVATARS : PRESET_AVATARS).map(preset => (
+                      <div
+                        key={preset.id}
+                        className="relative bg-zinc-900/60 border border-zinc-850 hover:border-pink-500/60 hover:bg-zinc-900 transition-all flex flex-col justify-between overflow-hidden shadow-lg p-3 group"
+                      >
+                        {/* Crown icon on superior upper corner matching screen capture */}
+                        <div className="absolute top-2 right-2 z-10">
+                          <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                        </div>
+
+                        {/* Interactive Centered character with premium walk/bounce style */}
+                        <div className="h-28 flex items-center justify-center p-2 select-none relative overflow-visible">
+                          {/* Pulsing glow ring inside */}
+                          <div className="absolute inset-0 m-auto w-14 h-14 bg-pink-500/5 rounded-full filter blur-xl group-hover:bg-pink-500/10 transition-colors" />
+                          
+                          {preset.spriteUrl.startsWith('vector:') ? (
+                            <div className="transform group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-300">
+                              <VectorAvatar 
+                                type={preset.spriteUrl.replace('vector:', '')} 
+                                facing="right" 
+                                isJumping={false} 
+                                isSpeaking={true} 
+                                scale={preset.scale || 1.15}
+                              />
+                            </div>
+                          ) : (
+                            <img 
+                              src={preset.spriteUrl} 
+                              alt={preset.name} 
+                              className="w-20 h-20 object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.6)] transform group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-300"
+                              referrerPolicy="no-referrer"
+                            />
+                          )}
+                        </div>
+
+                        {/* Text Caption label info */}
+                        <div className="text-center mb-2.5 min-w-0">
+                          <p className="text-[11.5px] font-bold text-zinc-100 truncate tracking-wide" title={preset.name}>
+                            {preset.name.split(' ')[0]} {preset.name.split(' ')[1] || ''}
+                          </p>
+                          <p className="text-[10px] text-zinc-500 font-mono truncate">
+                            {preset.name.includes('(') ? preset.name.substring(preset.name.indexOf('(')) : 'สเกล: x' + preset.scale}
+                          </p>
+                        </div>
+
+                        {/* + Add action button replicating Stream Avatars software interface */}
+                        <button
+                          onClick={() => {
+                            const newId = Math.random().toString(36).substring(2, 9);
+                            setSettings(prev => ({
+                              ...prev,
+                              customAvatars: [...(prev.customAvatars || []), { ...preset, id: newId }]
+                            }));
+                          }}
+                          className="w-full py-1.5 bg-zinc-950 hover:bg-pink-600 border border-zinc-800 hover:border-pink-500 text-zinc-300 hover:text-white font-mono font-bold text-[11px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer shadow-sm active:translate-y-[1px]"
+                        >
+                          <Sparkles className="w-3 h-3 text-yellow-400 group-hover:text-white shrink-0" />
+                          + Add อวตาร
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Add new custom avatar form */}
+                <div className="p-4 bg-zinc-900/15 border border-zinc-850 space-y-3 font-sans">
+                  <h4 className="text-xs font-mono font-bold text-zinc-150 uppercase flex items-center gap-1.5">➕ เพิ่มหรืออัญเชิญอวตารตัวของคุณเอง</h4>
+                  <p className="text-[10.5px] text-zinc-500 leading-normal">
+                    ใส่ภาพหรือลิงก์ GIF อนิเมชันตัวโปรดของคุณ เพื่อทำเป็นอวตารเดินสัญจรบนสตรีมของคุณ
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10.5px] font-mono text-zinc-400 font-bold uppercase block">ชื่อตัวละครอวตาร</label>
+                      <input 
+                        type="text" 
+                        placeholder="เช่น น้องแงวสุดซ่า, สไลม์เกรียน"
+                        value={newAvatarName}
+                        onChange={e => setNewAvatarName(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-none px-3 py-1.5 text-xs text-white placeholder-zinc-600 font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10.5px] font-mono text-zinc-400 font-bold uppercase block">ลิงก์รูปภาพ / ไฟล์ GIF โปร่งใส (URL)</label>
+                      <input 
+                        type="text" 
+                        placeholder="https://...รูปภาพโปร่งใส.gif"
+                        value={newAvatarUrl}
+                        onChange={e => setNewAvatarUrl(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-none px-3 py-1.5 text-xs text-white placeholder-zinc-650 font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
+                    <div className="flex-grow space-y-1">
+                      <div className="flex justify-between font-mono text-[10.5px] text-zinc-400">
+                        <span className="font-bold uppercase text-[9.5px]">ปรับขนาดตัวละคร (SCALE)</span>
+                        <span className="text-pink-400 font-bold font-mono">x{newAvatarScale.toFixed(1)}</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0.5" 
+                        max="2.5" 
+                        step="0.1"
+                        value={newAvatarScale}
+                        onChange={e => setNewAvatarScale(parseFloat(e.target.value))}
+                        className="w-full accent-pink-500 h-1 bg-zinc-800"
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (!newAvatarName.trim() || !newAvatarUrl.trim()) {
+                          alert('กรุณากรอกชื่อตัวละครและลิงก์รูปภาพอวตารให้ครบถ้วนก่อนส่ง!');
+                          return;
+                        }
+                        addCustomAvatar(newAvatarName, newAvatarUrl, newAvatarScale);
+                        setNewAvatarName('');
+                        setNewAvatarUrl('');
+                        setNewAvatarScale(1.0);
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-500 font-bold font-mono uppercase px-4 py-2 text-white h-auto rounded-none text-xs self-end shrink-0"
+                    >
+                      + บันทึกเพิ่มอวตาร
+                    </button>
+                  </div>
+                </div>
+
+                {/* List of active custom avatars */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                      📁 คอนฟิกตัวละครอวตารในระบบสตรีมน่ารัก ({settings.customAvatars?.length || 0})
+                    </h4>
+                    <button
+                      onClick={resetCustomAvatars}
+                      className="text-[10px] uppercase font-mono text-zinc-500 hover:text-red-400 flex items-center gap-1 underline transition-colors cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" /> คืนค่าเริ่มต้นทั้งหมด
+                    </button>
+                  </div>
+                  
+                  <div className="max-h-[220px] overflow-y-auto border border-zinc-900 bg-zinc-950 p-2 space-y-1.5 font-mono">
+                    {(!settings.customAvatars || settings.customAvatars.length === 0) ? (
+                      <p className="text-[10.5px] text-zinc-650 p-4 text-center">ไม่มีตัวละครอวตารทำงานอยู่ กรุณากดปุ่มเพิ่มหรือดึงตัวตั้งต้นแนะนําด้านบน</p>
+                    ) : (
+                      settings.customAvatars.map(av => (
+                        <div key={av.id} className="flex items-center justify-between bg-zinc-900/30 p-2 border border-zinc-850">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-10 h-10 flex items-center justify-center bg-zinc-950 rounded border border-zinc-800 shrink-0">
+                              {av.spriteUrl.startsWith('vector:') ? (
+                                <VectorAvatar 
+                                  type={av.spriteUrl.replace('vector:', '')} 
+                                  facing="right" 
+                                  isJumping={false} 
+                                  isSpeaking={false} 
+                                  scale={0.7}
+                                />
+                              ) : (
+                                <img 
+                                  src={av.spriteUrl} 
+                                  alt="" 
+                                  className="w-8 h-8 object-contain" 
+                                  referrerPolicy="no-referrer"
+                                />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs text-zinc-350 font-bold truncate">{av.name}</p>
+                              <p className="text-[9px] text-zinc-650 truncate max-w-[180px] md:max-w-[320px]">{av.spriteUrl}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-[10px] text-zinc-400 font-bold font-mono">x{av.scale || 1.0}</span>
+                            <button
+                              onClick={() => deleteCustomAvatar(av.id)}
+                              className="p-1 text-zinc-500 hover:text-red-500 transition-colors"
+                              title="ลบอวตารตัวนี้"
+                            >
+                              <Trash className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Copy stream overlay instruction */}
+                <div className="p-3.5 bg-indigo-950/10 border border-indigo-900/30 font-mono">
+                  <h5 className="text-[11px] font-bold text-indigo-400 uppercase flex items-center gap-1.5 mb-1.5 font-mono">
+                    ⚙️ วิธีเปิดใช้งานใน OBS STUDIO
+                  </h5>
+                  <ul className="list-disc pl-4 text-[11px] text-zinc-400 space-y-1.5 font-sans leading-relaxed">
+                    <li>คัดลอกลิงก์ด้านขวาบนหน้า <strong className="text-pink-400">"OBS ลิงก์ที่ 5: แสดงตัวอวตารตกแต่งจอ"</strong></li>
+                    <li>ในโปรแกรม OBS, เพิ่มแหล่งข้อมูล <strong>"Browser Source" (เบราว์เซอร์ซอร์ส)</strong></li>
+                    <li>วางลิงก์ที่คัดลอกมา และตั้งขนาดหน้าจอให้ใหญ่ตามต้องการ (เช่น <strong>กว้าง 1200 x สูง 500</strong> หรือเต็มจอ 1920x1080)</li>
+                    <li>ลากตัวเบราว์เซอร์ซอร์สมาไว้ด้านล่างสุดของช่องไลฟ์สตรีม เพื่อให้อวตารเดินไปเดินมาบนพื้นได้อย่างน่ารัก!</li>
+                  </ul>
                 </div>
               </div>
             )}
@@ -812,6 +1326,33 @@ export default function DashboardView() {
               </div>
             </div>
 
+            {/* Link 5: Stream Avatars (Walkers with Speech Bubbles) */}
+            <div className="pt-2 border-t border-zinc-900/60 font-mono text-[10.5px]">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-pink-500 font-mono flex items-center gap-1.5 mb-1">
+                <Users className="w-3.5 h-3.5 text-pink-500" /> OBS ลิงก์ที่ 5: แสดงตัวอวตารตกแต่งหน้าจอ (NEW)
+              </h4>
+              <p className="text-[9.5px] text-zinc-500 font-mono uppercase mb-1.5">
+                Stream Avatars: Wander around bottom with chat bubbles above heads
+              </p>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-none p-2 flex items-center justify-between gap-2 overflow-hidden font-mono">
+                <span className="text-zinc-440 truncate flex-1 min-w-0 pr-2 pb-0.5">
+                  {avatarsOnlyOverlayUrl}
+                </span>
+                <button 
+                  onClick={copyAvatarsToClipboard}
+                  className={`py-1 px-2.5 rounded-none text-[11px] font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
+                    copiedAvatars 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-pink-600 hover:bg-pink-500 text-white shadow-sm'
+                  }`}
+                  id="copy-avatars-overlay-btn"
+                >
+                  {copiedAvatars ? <Check className="w-3 h-3" /> : <Clipboard className="w-3 h-3" />}
+                  {copiedAvatars ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
             <p className="text-[9.5px] text-zinc-650 font-mono text-center leading-normal uppercase pt-1 border-t border-zinc-900">
               Add any link as browser sources inside OBS to separate and layout elements!
             </p>
@@ -901,7 +1442,14 @@ export default function DashboardView() {
             {/* Simulated Live Viewport Overlay view container */}
             <div className="relative w-full h-full max-h-[580px] bg-transparent border border-zinc-900 rounded-none flex flex-col justify-end p-4 overflow-hidden shadow-md">
               {/* Load Overlay strictly in isDemo simulation mode, binding to user styles dynamically */}
-              <OverlayView settingsOverride={settings} isDemo={true} />
+              <OverlayView 
+                settingsOverride={
+                  activeTab === 'avatars' 
+                    ? { ...settings, mode: 'avatars' } 
+                    : settings
+                } 
+                isDemo={true} 
+              />
             </div>
           </div>
         </section>

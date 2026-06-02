@@ -22,7 +22,11 @@ export interface OverlaySettings {
   animationStyle: 'slide-up' | 'slide-left' | 'fade-in' | 'scale-pop';
   testChannelName: string;
   showImageAlerts?: boolean; // toggle separate image alerts tray
-  mode?: 'chat_alerts' | 'images_only' | 'chat_only' | 'alerts_only' | 'all';
+  mode?: 'chat_alerts' | 'images_only' | 'chat_only' | 'alerts_only' | 'avatars' | 'all';
+  customAvatars?: Array<{ id: string; name: string; spriteUrl: string; scale?: number }>;
+  vectorAvatarSpeed?: number;
+  hideAvatarsWhenNoViewers?: boolean;
+  testViewerCount?: number;
 }
 
 export interface ChatMessage {

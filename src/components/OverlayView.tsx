@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MessageSquare, Heart, Gift, UserPlus, Share2, Shield, Star, Award, WifiOff, Volume2, Image, Sparkles, Camera } from 'lucide-react';
 import { ChatMessage, AlertEvent, OverlaySettings, OverlayTheme } from '../types';
 import { soundSynth } from '../utils/audio';
+import VectorAvatar from './VectorAvatar';
 
 interface OverlayViewProps {
   settingsOverride?: Partial<OverlaySettings>;
@@ -59,42 +60,65 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       animationStyle: 'slide-up',
       testChannelName: 'IndoFinity Streamer',
       showImageAlerts: true,
-      mode: 'all'
+      mode: 'all',
+      vectorAvatarSpeed: 1.0,
+      hideAvatarsWhenNoViewers: false,
+      testViewerCount: 1
     };
+
+    // Load from localStorage as a fail-safe fallback
+    let savedSettings: Partial<OverlaySettings> = {};
+    try {
+      const saved = localStorage.getItem('obs_overlay_settings');
+      if (saved) {
+        savedSettings = JSON.parse(saved);
+      }
+    } catch (e) {
+      // Ignore
+    }
 
     // If we've got override parameters (from the Dashboard live-preview), use those
     if (settingsOverride) {
-      return { ...defaultSettings, ...settingsOverride };
+      return { ...defaultSettings, ...savedSettings, ...settingsOverride };
     }
 
     // Otherwise, parse query parameters for direct OBS overlay URL
     try {
       const parsed: OverlaySettings = {
-        wsUrl: searchParams.get('wsUrl') || defaultSettings.wsUrl,
-        theme: (searchParams.get('theme') as OverlayTheme) || defaultSettings.theme,
-        fontSize: Number(searchParams.get('fontSize')) || defaultSettings.fontSize,
-        maxMessages: Number(searchParams.get('maxMessages')) || defaultSettings.maxMessages,
-        messageLifetime: searchParams.has('messageLifetime') ? Number(searchParams.get('messageLifetime')) : defaultSettings.messageLifetime,
-        showAvatars: searchParams.get('showAvatars') !== 'false',
-        showBadges: searchParams.get('showBadges') !== 'false',
-        alertSounds: searchParams.get('alertSounds') !== 'false',
-        textToSpeech: searchParams.get('textToSpeech') === 'true',
-        ttsVoiceRate: Number(searchParams.get('ttsVoiceRate')) || defaultSettings.ttsVoiceRate,
-        ttsVoicePitch: Number(searchParams.get('ttsVoicePitch')) || defaultSettings.ttsVoicePitch,
-        highlightKeywords: searchParams.get('highlightKeywords')?.split(',') || defaultSettings.highlightKeywords,
-        ignoredUsers: searchParams.get('ignoredUsers')?.split(',') || defaultSettings.ignoredUsers,
-        animationStyle: (searchParams.get('animationStyle') as any) || defaultSettings.animationStyle,
-        testChannelName: defaultSettings.testChannelName,
-        showImageAlerts: searchParams.get('showImageAlerts') !== 'false',
-        mode: (searchParams.get('mode') as any) || 'all'
+        wsUrl: searchParams.get('wsUrl') || savedSettings.wsUrl || defaultSettings.wsUrl,
+        theme: (searchParams.get('theme') as OverlayTheme) || savedSettings.theme || defaultSettings.theme,
+        fontSize: Number(searchParams.get('fontSize')) || savedSettings.fontSize || defaultSettings.fontSize,
+        maxMessages: Number(searchParams.get('maxMessages')) || savedSettings.maxMessages || defaultSettings.maxMessages,
+        messageLifetime: searchParams.has('messageLifetime') ? Number(searchParams.get('messageLifetime')) : (savedSettings.messageLifetime !== undefined ? savedSettings.messageLifetime : defaultSettings.messageLifetime),
+        showAvatars: searchParams.has('showAvatars') ? searchParams.get('showAvatars') !== 'false' : (savedSettings.showAvatars !== undefined ? savedSettings.showAvatars : true),
+        showBadges: searchParams.has('showBadges') ? searchParams.get('showBadges') !== 'false' : (savedSettings.showBadges !== undefined ? savedSettings.showBadges : true),
+        alertSounds: searchParams.has('alertSounds') ? searchParams.get('alertSounds') !== 'false' : (savedSettings.alertSounds !== undefined ? savedSettings.alertSounds : true),
+        textToSpeech: searchParams.has('textToSpeech') ? searchParams.get('textToSpeech') === 'true' : (savedSettings.textToSpeech !== undefined ? savedSettings.textToSpeech : false),
+        ttsVoiceRate: Number(searchParams.get('ttsVoiceRate')) || savedSettings.ttsVoiceRate || defaultSettings.ttsVoiceRate,
+        ttsVoicePitch: Number(searchParams.get('ttsVoicePitch')) || savedSettings.ttsVoicePitch || defaultSettings.ttsVoicePitch,
+        highlightKeywords: searchParams.get('highlightKeywords')?.split(',') || savedSettings.highlightKeywords || defaultSettings.highlightKeywords,
+        ignoredUsers: searchParams.get('ignoredUsers')?.split(',') || savedSettings.ignoredUsers || defaultSettings.ignoredUsers,
+        animationStyle: (searchParams.get('animationStyle') as any) || savedSettings.animationStyle || defaultSettings.animationStyle,
+        testChannelName: savedSettings.testChannelName || defaultSettings.testChannelName,
+        showImageAlerts: searchParams.has('showImageAlerts') ? searchParams.get('showImageAlerts') !== 'false' : (savedSettings.showImageAlerts !== undefined ? savedSettings.showImageAlerts : true),
+        mode: (searchParams.get('mode') as any) || savedSettings.mode || 'all',
+        customAvatars: savedSettings.customAvatars || defaultSettings.customAvatars,
+        vectorAvatarSpeed: searchParams.has('vectorAvatarSpeed') ? Number(searchParams.get('vectorAvatarSpeed')) : (savedSettings.vectorAvatarSpeed !== undefined ? savedSettings.vectorAvatarSpeed : 1.0),
+        hideAvatarsWhenNoViewers: searchParams.has('hideAvatarsWhenNoViewers') ? searchParams.get('hideAvatarsWhenNoViewers') === 'true' : (savedSettings.hideAvatarsWhenNoViewers !== undefined ? savedSettings.hideAvatarsWhenNoViewers : false),
+        testViewerCount: searchParams.has('testViewerCount') ? Number(searchParams.get('testViewerCount')) : (savedSettings.testViewerCount !== undefined ? savedSettings.testViewerCount : 1)
       };
       return parsed;
     } catch {
-      return defaultSettings;
+      return { ...defaultSettings, ...savedSettings };
     }
   }, [settingsOverride, window.location.search]);
 
   // Custom User colors mapping to keep username colors consistent in chat overlays
+  const settingsRef = useRef<OverlaySettings>(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
   const userColorsMap = useRef<Record<string, string>>({});
   const getUserColor = (username: string) => {
     if (userColorsMap.current[username]) return userColorsMap.current[username];
@@ -117,6 +141,166 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     userColorsMap.current[username] = color;
     return color;
   };
+
+  // Active avatars walking around
+  interface StreamAvatar {
+    id: string;
+    uniqueId: string;
+    nickname: string;
+    x: number; // percentage (0 to 100)
+    y: number; // height offset (vertical jump, pixels)
+    vx: number; // horizontal velocity
+    vy: number; // vertical velocity (jump physics)
+    facing: 'left' | 'right';
+    isJumping: boolean;
+    spriteUrl: string;
+    scale: number;
+    bubbleText: string;
+    bubbleTime: number; // expiration timestamp
+  }
+  const [avatars, setAvatars] = useState<StreamAvatar[]>([]);
+  const [activeViewers, setActiveViewers] = useState<number>(() => {
+    return settings.testViewerCount !== undefined ? settings.testViewerCount : 1;
+  });
+
+  useEffect(() => {
+    if (settings.testViewerCount !== undefined) {
+      setActiveViewers(settings.testViewerCount);
+    }
+  }, [settings.testViewerCount]);
+
+  const getAvatarPool = () => {
+    if (settings.customAvatars && settings.customAvatars.length > 0) {
+      return settings.customAvatars;
+    }
+    // If empty, return standard defaults
+    return [
+      { id: '1', name: 'สไลม์เจลลี่ดึ๋งดั๋ง', spriteUrl: 'vector:slime', scale: 1.15 },
+      { id: '2', name: 'หุ่นยนต์ไซเบอร์บอท', spriteUrl: 'vector:robot', scale: 1.15 },
+      { id: '3', name: 'นินจาเงาวายุสะกดชีพ', spriteUrl: 'vector:ninja', scale: 1.15 },
+      { id: '4', name: 'ลูกแมวเหมียวสามสี', spriteUrl: 'vector:kitten', scale: 1.15 }
+    ];
+  };
+
+  useEffect(() => {
+    const pool = getAvatarPool();
+    setAvatars(prev => {
+      const poolIds = pool.map(item => item.id);
+      
+      // Filter out any older configured avatars that are no longer in pool
+      // But KEEP viewer-specific avatars that spawned dynamically on chat (usually id starts with "chatter_")
+      const viewerAvatars = prev.filter(av => av.id.startsWith('chatter_') || av.id.startsWith('bot_') || !poolIds.includes(av.id));
+      
+      // Map pool items into walking avatars
+      const configuredAvatars = pool.map((item, index) => {
+        const existing = prev.find(av => av.id === item.id);
+        if (existing) {
+          // Keep existing physics status but sync latest sprite scale/url
+          return {
+            ...existing,
+            spriteUrl: item.spriteUrl,
+            scale: item.scale || 1.15
+          };
+        }
+        
+        // Spawn brand new avatar with a cute leap
+        const rSpeedIndex = Math.random() > 0.5 ? 1 : -1;
+        const defaultPositions = [15, 32, 48, 65, 80, 92];
+        const posX = defaultPositions[index % defaultPositions.length] + (Math.random() * 8 - 4);
+        
+        return {
+          id: item.id,
+          uniqueId: (item.name || 'avatar').toLowerCase().replace(/\s+/g, '_') + '_' + item.id,
+          nickname: item.name.includes('(') ? item.name.split('(')[0].trim() : item.name,
+          x: Math.max(4, Math.min(96, posX)),
+          y: 0,
+          vx: (Math.random() * 0.08 + 0.07) * rSpeedIndex,
+          vy: -6 - Math.random() * 4, // cute spawn leap!
+          facing: rSpeedIndex > 0 ? 'right' as const : 'left' as const,
+          isJumping: true,
+          spriteUrl: item.spriteUrl,
+          scale: item.scale || 1.15,
+          bubbleText: index === 0 ? 'สวัสดีค้าบ ยินดีต้อนรับสู่แชทอวตารดึ๋งดั๋ง 💕' : '',
+          bubbleTime: index === 0 ? Date.now() + 6000 : 0
+        };
+      });
+
+      return [...configuredAvatars, ...viewerAvatars.slice(0, 6)];
+    });
+  }, [settings.customAvatars]);
+
+  useEffect(() => {
+    let active = true;
+    const updatePhysics = () => {
+      if (!active) return;
+      setAvatars(prev => 
+        prev.map(av => {
+          // Horizontal movement
+          let speedMult = 1.0;
+          if (av.spriteUrl.startsWith('vector:') && settingsRef.current.vectorAvatarSpeed !== undefined) {
+            speedMult = settingsRef.current.vectorAvatarSpeed;
+          }
+          let nextX = av.x + (av.vx * speedMult);
+          let nextVx = av.vx;
+          let nextFacing = av.facing;
+
+          // Hit horizontal boundaries (0% to 100% of screenspace)
+          if (nextX < 2) {
+            nextX = 2;
+            nextVx = Math.abs(av.vx);
+            nextFacing = 'right';
+          } else if (nextX > 94) {
+            nextX = 94;
+            nextVx = -Math.abs(av.vx);
+            nextFacing = 'left';
+          }
+
+          // Occasional turn around
+          if (Math.random() < 0.005) {
+            nextVx = -nextVx;
+            nextFacing = nextVx > 0 ? 'right' : 'left';
+          }
+
+          // Vertical Jump updates (vertical clearance bottom floor)
+          let nextY = av.y + av.vy;
+          let nextVy = av.vy;
+          let nextIsJumping = av.isJumping;
+
+          if (nextIsJumping) {
+            nextVy += 0.5; // gravity acceleration
+            if (nextY <= 0) {
+              nextY = 0;
+              nextVy = 0;
+              nextIsJumping = false;
+            }
+          } else {
+            // Occasional random jump
+            if (Math.random() < 0.008) {
+              nextVy = -8 - Math.random() * 5; // jump upwards
+              nextIsJumping = true;
+            }
+          }
+
+          return {
+            ...av,
+            x: nextX,
+            vx: nextVx,
+            facing: nextFacing,
+            y: nextY,
+            vy: nextVy,
+            isJumping: nextIsJumping
+          };
+        })
+      );
+      requestAnimationFrame(updatePhysics);
+    };
+
+    const frameId = requestAnimationFrame(updatePhysics);
+    return () => {
+      active = false;
+      cancelAnimationFrame(frameId);
+    };
+  }, []);
 
   // Sound triggering helper
   const triggerSound = (type: 'chat' | 'alert' | 'gift' | 'image') => {
@@ -281,6 +465,54 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       });
     }
 
+    // 4.5 Update/spawn Stream Avatar bubble text and trigger reaction jump
+    if (settings.mode === 'avatars' || settings.mode === 'all' || settings.mode === 'chat_alerts' || settings.mode === 'chat_only') {
+      const msgUniqueId = messageObj.uniqueId;
+      const msgNickname = messageObj.nickname;
+      const msgComment = messageObj.comment || '';
+
+      if (msgComment && messageObj.type === 'chat') {
+        setAvatars(prev => {
+          const index = prev.findIndex(av => av.uniqueId.toLowerCase() === msgUniqueId.toLowerCase());
+          
+          if (index !== -1) {
+            // Update existing avatar: trigger jump and speech bubble
+            const updated = [...prev];
+            updated[index] = {
+              ...updated[index],
+              nickname: msgNickname,
+              bubbleText: msgComment,
+              bubbleTime: Date.now() + 6500, // bubble lasts 6.5s
+              vy: updated[index].isJumping ? updated[index].vy : -9 // Jump on speak!
+            };
+            return updated;
+          } else {
+            // Spawn new avatar
+            const pool = getAvatarPool();
+            const randomSpriteIndex = Math.floor(Math.random() * pool.length);
+            const rSpeedIndex = Math.random() > 0.5 ? 1 : -1;
+            const newAv: StreamAvatar = {
+              id: Math.random().toString(36).substring(2, 9),
+              uniqueId: msgUniqueId,
+              nickname: msgNickname,
+              x: 10 + Math.random() * 80,
+              y: 0,
+              vx: (Math.random() * 0.1 + 0.08) * rSpeedIndex,
+              vy: -11, // Spawn with a cute leap
+              facing: rSpeedIndex > 0 ? 'right' : 'left',
+              isJumping: true,
+              spriteUrl: pool[randomSpriteIndex].spriteUrl,
+              scale: pool[randomSpriteIndex].scale || 1.1,
+              bubbleText: msgComment,
+              bubbleTime: Date.now() + 6500
+            };
+            const activePool = prev.length >= 15 ? prev.slice(1) : prev;
+            return [...activePool, newAv];
+          }
+        });
+      }
+    }
+
     // 5. Construct Visual Alert Banner for crucial events (Follow, Gift, Share, Like above 5x)
     if (messageObj.type !== 'chat' && messageObj.type !== 'share_image') {
       let detailText = '';
@@ -384,6 +616,35 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
             const { event: streamEvent, data: eventData } = message;
 
             console.log(`Event parsed: ${streamEvent}`, eventData);
+
+            // Auto detect viewer count from various stream connector payloads
+            if (message && typeof message === 'object') {
+              const viewerFields = ['viewerCount', 'memberCount', 'viewersCount', 'viewer_count', 'viewers', 'activeViewers', 'userCount', 'count'];
+              for (const field of viewerFields) {
+                if (typeof message[field] === 'number') {
+                  setActiveViewers(message[field]);
+                  break;
+                }
+              }
+            }
+            if (eventData && typeof eventData === 'object') {
+              const viewerFields = ['viewerCount', 'memberCount', 'viewersCount', 'viewer_count', 'viewers', 'activeViewers', 'userCount', 'count', 'member_count'];
+              for (const field of viewerFields) {
+                if (typeof eventData[field] === 'number') {
+                  setActiveViewers(eventData[field]);
+                  break;
+                } else if (typeof eventData[field] === 'string' && !isNaN(Number(eventData[field]))) {
+                  setActiveViewers(Number(eventData[field]));
+                  break;
+                }
+              }
+            }
+            if (streamEvent === 'roomViewer' || streamEvent === 'memberCount' || streamEvent === 'viewerCount' || streamEvent === 'viewer') {
+              const count = eventData?.viewerCount ?? eventData?.memberCount ?? eventData?.count ?? eventData?.viewer_count;
+              if (count !== undefined && count !== null) {
+                setActiveViewers(Number(count));
+              }
+            }
 
             if (streamEvent === 'chat') {
               handleIncomingMessage({
@@ -729,7 +990,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       )}
 
       {/* Top Center alert notifications banner overlay */}
-      {settings.mode !== 'chat_only' && settings.mode !== 'images_only' && (
+      {settings.mode !== 'chat_only' && settings.mode !== 'images_only' && settings.mode !== 'avatars' && (
         <div className="absolute top-8 left-0 right-0 flex justify-center h-28 pointer-events-none z-20">
           <AnimatePresence mode="wait">
             {activeAlert && (
@@ -1228,7 +1489,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       </div>
 
       {/* Primary chat scroll container - bottom aligned */}
-      {settings.mode !== 'images_only' && settings.mode !== 'alerts_only' && (
+      {settings.mode !== 'images_only' && settings.mode !== 'alerts_only' && settings.mode !== 'avatars' && (
         <div 
           className="w-full max-w-md flex flex-col pointer-events-none self-start relative z-20 overflow-y-auto"
           style={{ fontSize: `${settings.fontSize}px`, maxHeight: '75vh' }}
@@ -1355,6 +1616,98 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
               );
             })}
           </AnimatePresence>
+        </div>
+      )}
+
+      {/* Stream Avatars walking stage */}
+      {(settings.mode === 'avatars' || settings.mode === 'all') && (
+        <div 
+          className={`absolute inset-x-0 bottom-2 h-[220px] pointer-events-none z-30 font-sans overflow-visible select-none transition-all duration-700 ease-in-out ${
+            settings.hideAvatarsWhenNoViewers && activeViewers === 0
+              ? 'opacity-0 scale-95 pointer-events-none translate-y-12'
+              : 'opacity-100 scale-100 translate-y-0'
+          }`}
+        >
+          {avatars.map(av => {
+            const isBubbleActive = av.bubbleText && av.bubbleTime > Date.now();
+            return (
+              <div
+                key={av.id}
+                className="absolute transition-all duration-[16ms] ease-linear flex flex-col items-center overflow-visible"
+                style={{
+                  left: `${av.x}%`,
+                  bottom: `${av.y}px`,
+                  transform: 'translateX(-50%)',
+                  transformOrigin: 'bottom center'
+                }}
+              >
+                {/* Speech Bubble above head */}
+                <AnimatePresence>
+                  {isBubbleActive && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.6, y: 15 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.7, y: -10, transition: { duration: 0.18 } }}
+                      className="relative mb-2.5 bg-zinc-950/95 text-white text-[11.5px] px-3 py-2 max-w-[160px] border border-pink-500 rounded-2xl shadow-[0_4px_12px_rgba(236,72,153,0.25)] text-center break-words font-medium overflow-visible leading-relaxed flex flex-col items-center select-text pointer-events-auto"
+                    >
+                      <span className="font-bold text-[9px] text-pink-400 font-mono tracking-tight mb-0.5 truncate max-w-full">
+                        @{av.nickname}
+                      </span>
+                      {av.bubbleText}
+                      {/* Triangle Notch pointed down at head */}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[7px] border-t-pink-500" />
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[2px] w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] border-t-zinc-950" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Avatar character sprite with cute walking bounce animation */}
+                <div className="relative flex flex-col items-center">
+                  {av.spriteUrl.startsWith('vector:') ? (
+                    <div 
+                      className={`transition-transform duration-200 ${
+                        av.isJumping ? 'animate-none' : 'animate-[bounce_2.2s_infinite_ease-in-out]'
+                      }`}
+                      style={{
+                        filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4))'
+                      }}
+                    >
+                      <VectorAvatar 
+                        type={av.spriteUrl.replace('vector:', '')} 
+                        facing={av.facing} 
+                        isJumping={av.isJumping} 
+                        isSpeaking={!!isBubbleActive} 
+                        scale={av.scale || 1.15}
+                      />
+                    </div>
+                  ) : (
+                    <img
+                      src={av.spriteUrl}
+                      alt=""
+                      className={`object-contain select-none pointer-events-none transition-transform duration-200 ${
+                        av.facing === 'left' ? 'scale-x-[-1]' : 'scale-x-[1]'
+                      } ${
+                        av.isJumping ? 'animate-none' : 'animate-[bounce_1.8s_infinite_ease-in-out]'
+                      }`}
+                      style={{
+                        height: `${55 * (av.scale || 1.0)}px`,
+                        width: `${55 * (av.scale || 1.0)}px`,
+                        filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5))'
+                      }}
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
+                  
+                  {/* Small tag/badge display name underneath characters when bubble is NOT active */}
+                  {!isBubbleActive && (
+                    <div className="mt-1 bg-black/70 border border-zinc-900 text-[8.5px] text-zinc-350 px-1.5 py-0.5 rounded-md font-mono shrink-0 font-bold whitespace-nowrap shadow tracking-wide leading-none select-none max-w-[100px] truncate">
+                      {av.nickname}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
