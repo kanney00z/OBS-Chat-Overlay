@@ -21,16 +21,19 @@ export interface OverlaySettings {
   ignoredUsers: string[];
   animationStyle: 'slide-up' | 'slide-left' | 'fade-in' | 'scale-pop';
   testChannelName: string;
+  showImageAlerts?: boolean; // toggle separate image alerts tray
+  mode?: 'chat_alerts' | 'images_only' | 'all';
 }
 
 export interface ChatMessage {
   id: string;
   timestamp: number;
-  type: 'chat' | 'gift' | 'like' | 'follow' | 'share';
+  type: 'chat' | 'gift' | 'like' | 'follow' | 'share' | 'share_image';
   uniqueId: string; // @handle
   nickname: string; // friendly name
   comment?: string; // chat message text
   profilePictureUrl?: string; // avatar
+  imageUrl?: string; // sent photo/image URL
   
   // Badges
   isModerator?: boolean;

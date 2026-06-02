@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { 
   Settings, Sliders, Play, Laptop, Clipboard, Check, HelpCircle, 
   MessageSquare, Heart, Gift, UserPlus, Share2, Shield, Eye, Volume2, 
-  VolumeX, RefreshCw, Sparkles, AlertCircle, Trash2, ArrowRight, Video, ListFilter
+  VolumeX, RefreshCw, Sparkles, AlertCircle, Trash2, ArrowRight, Video, ListFilter, Image
 } from 'lucide-react';
 import { OverlaySettings, OverlayTheme, ChatMessage } from '../types';
 import OverlayView from './OverlayView';
@@ -28,10 +28,12 @@ export default function DashboardView() {
     highlightKeywords: ['obs', 'indofinity', 'stream', 'highlight'],
     ignoredUsers: [],
     animationStyle: 'slide-up',
-    testChannelName: 'IndoFinity Streamer'
+    testChannelName: 'IndoFinity Streamer',
+    showImageAlerts: true
   });
 
-  const [copied, setCopied] = useState(false);
+  const [copiedChat, setCopiedChat] = useState(false);
+  const [copiedImages, setCopiedImages] = useState(false);
   const [backgroundType, setBackgroundType] = useState<'checkerboard' | 'game' | 'dark' | 'green'>('game');
   const [customComment, setCustomComment] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
@@ -65,12 +67,13 @@ export default function DashboardView() {
     { name: 'ยานอวกาศยูนิเวิร์ส', icon: '🚀', val: 1000, pfp: mockAvatarUrls[4] }
   ];
 
-  // Dynamically compute the URL needed for OBS Browser Source
-  const generatedOverlayUrl = JSON.stringify(settings) && (() => {
+  // Helper to build a clean overlay URL with custom override parameter
+  const buildOverlayUrl = (mode: 'chat_alerts' | 'images_only') => {
     const base = window.location.origin;
     const params = new URLSearchParams();
     
     params.set('overlay', 'true');
+    params.set('mode', mode);
     params.set('wsUrl', settings.wsUrl);
     params.set('theme', settings.theme);
     params.set('fontSize', settings.fontSize.toString());
@@ -81,8 +84,9 @@ export default function DashboardView() {
     params.set('alertSounds', settings.alertSounds.toString());
     params.set('textToSpeech', settings.textToSpeech.toString());
     params.set('ttsVoiceRate', settings.ttsVoiceRate.toString());
-    params.set('ttsVoicePitch: ', settings.ttsVoicePitch.toString());
+    params.set('ttsVoicePitch', settings.ttsVoicePitch.toString());
     params.set('animationStyle', settings.animationStyle);
+    params.set('showImageAlerts', (settings.showImageAlerts !== false).toString());
     
     if (settings.highlightKeywords.length > 0) {
       params.set('highlightKeywords', settings.highlightKeywords.join(','));
@@ -92,12 +96,21 @@ export default function DashboardView() {
     }
 
     return `${base}/?${params.toString()}`;
-  })();
+  };
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(generatedOverlayUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
+  const chatAlertsOverlayUrl = buildOverlayUrl('chat_alerts');
+  const imagesOnlyOverlayUrl = buildOverlayUrl('images_only');
+
+  const copyChatToClipboard = () => {
+    navigator.clipboard.writeText(chatAlertsOverlayUrl);
+    setCopiedChat(true);
+    setTimeout(() => setCopiedChat(false), 3000);
+  };
+
+  const copyImagesToClipboard = () => {
+    navigator.clipboard.writeText(imagesOnlyOverlayUrl);
+    setCopiedImages(true);
+    setTimeout(() => setCopiedImages(false), 3000);
   };
 
   // Chat Simulator Trigger functions sending events via browser dispatch listeners
@@ -184,6 +197,42 @@ export default function DashboardView() {
       uniqueId: 'sharer_' + Math.floor(Math.random() * 9000),
       nickname: 'Share_Buddy_' + randomIdx,
       profilePictureUrl: settings.showAvatars ? mockAvatarUrls[randomIdx] : undefined
+    });
+  };
+
+  const mockSharedImages = [
+    'https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=400&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?w=400&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=400&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1472214222541-d510753a4707?w=400&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=400&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=400&fit=crop&q=80'
+  ];
+
+  const simulateSendImage = () => {
+    const randomImgIdx = Math.floor(Math.random() * mockSharedImages.length);
+    const randomAvatarIdx = Math.floor(Math.random() * mockAvatarUrls.length);
+    const names = ['Art_Lover_99', 'Camera_Guy', 'Meme_Master', 'NatureExplorer', 'CoolPhotoFan', 'PixelWizard'];
+    const randomName = names[Math.floor(Math.random() * names.length)];
+    const thoughts = [
+      'ฝากรูปนี้ให้สตรีมเมอร์ดูหน่อยครับ สวยไหม! 🖼️✨',
+      'แมวที่บ้านผมน่ารักไหมครับพี่สตรีมเมอร์ 🐾📸',
+      'เพิ่งไปเที่ยวถ่ายรูปนี้มา สวยสดชื่นจริงๆ เลยครับ ⛰️☀️',
+      'เจอมุกรูปนี้มา ขำกลิ้ง ตลกจัดๆ เลยเอามาแชร์ ฮ่าๆ 😆',
+      'งานอาร์ตชิ้นโปรดอันใหม่ที่วาดเสร็จเมื่อคืนครับผม! ✏️🎨',
+      'เอาภาพสวยๆ มาสร้างบรรยากาศห้องสตรีมให้นะค้าบ 🎉'
+    ];
+    const randomComment = thoughts[Math.floor(Math.random() * thoughts.length)];
+    
+    sendSimulatedEvent({
+      type: 'share_image',
+      uniqueId: randomName.toLowerCase(),
+      nickname: randomName,
+      comment: randomComment,
+      profilePictureUrl: settings.showAvatars ? mockAvatarUrls[randomAvatarIdx] : undefined,
+      imageUrl: mockSharedImages[randomImgIdx],
+      isSubscriber: Math.random() > 0.4
     });
   };
 
@@ -401,6 +450,24 @@ export default function DashboardView() {
                       <span className="w-3.5 h-3.5 bg-white" />
                     </button>
                   </div>
+
+                  <div className="flex items-center justify-between border-t border-zinc-900 pt-3.5">
+                    <div>
+                      <h4 className="text-xs font-mono font-bold tracking-wide text-zinc-200 flex items-center gap-1">
+                        <Image className="w-3.5 h-3.5 text-pink-400" /> แยกแจ้งเตือนผู้ชมส่งรูปภาพ
+                      </h4>
+                      <p className="text-[11px] text-zinc-500">แสดงรูปภาพอ้างอิงแยกออกจากกล่องแชทหลักเพื่อป้องกันความวุ่นวาย</p>
+                    </div>
+                    <button 
+                      onClick={() => setSettings(prev => ({ ...prev, showImageAlerts: !prev.showImageAlerts }))}
+                      className={`w-10 h-5.5 rounded-none flex items-center p-1 cursor-pointer transition-colors ${
+                        (settings.showImageAlerts !== false) ? 'bg-indigo-600 justify-end' : 'bg-zinc-850 justify-start'
+                      }`}
+                      id="toggle-image-alerts-btn"
+                    >
+                      <span className="w-3.5 h-3.5 bg-white" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -432,7 +499,7 @@ export default function DashboardView() {
                       >
                         <div>
                           <h4 className="text-xs font-mono font-bold text-zinc-150">{t.label}</h4>
-                          <p className="text-[10px] text-zinc-500 font-sans mt-0.5 leading-normal">{t.desc}</p>
+                          <p className="text-[10px] text-zinc-550 font-sans mt-0.5 leading-normal">{t.desc}</p>
                         </div>
                         <div className="mt-2.5 flex justify-end">
                           <span className={`w-2 h-2 rounded-full ${settings.theme === t.id ? 'bg-indigo-400 animate-pulse' : 'bg-transparent'}`} />
@@ -447,6 +514,25 @@ export default function DashboardView() {
             {/* AUDIO & TEXT_TO_SPEECH SETTINGS TAB */}
             {activeTab === 'audio' && (
               <div className="space-y-5">
+                {/* Alert Sounds Master switch */}
+                <div className="p-3.5 bg-zinc-900/40 border border-zinc-805 rounded-none flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-mono font-bold text-zinc-100 uppercase">เปิดใช้งานเสียงแจ้งเตือน (Alert Sounds)</h4>
+                    <p className="text-[11px] text-zinc-550 mt-1 leading-normal">
+                      เล่นไฟล์เสียงเอฟเฟกต์สั้นๆ เมื่อมีความเห็นส่งของขวัญ กดติดตาม หรืออื่นๆ เกิดขึ้น
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setSettings(prev => ({ ...prev, alertSounds: !prev.alertSounds }))}
+                    className={`w-10 h-5.5 rounded-none flex items-center p-1 cursor-pointer transition-colors ${
+                      settings.alertSounds ? 'bg-indigo-600 justify-end' : 'bg-zinc-850 justify-start'
+                    }`}
+                    id="alert-sounds-toggle"
+                  >
+                    <span className="w-3.5 h-3.5 bg-white" />
+                  </button>
+                </div>
+
                 {/* Text To Speech toggle */}
                 <div className="p-3.5 bg-zinc-900/40 border border-zinc-800 rounded-none space-y-4">
                   <div className="flex items-center justify-between">
@@ -454,7 +540,7 @@ export default function DashboardView() {
                       <h4 className="text-xs font-mono font-bold text-zinc-100 flex items-center gap-1.5 uppercase transition-colors">
                         ออกเสียงอ่านแชทด้วยระบบเสียงสังเคราะห์ (TTS)
                       </h4>
-                      <p className="text-[11px] text-zinc-500 mt-1 leading-normal">
+                      <p className="text-[11px] text-zinc-550 mt-1 leading-normal">
                         เครื่องคอมพิวเตอร์จะแวะอ่านความคิดเห็นสั้นๆ และชื่อผู้ใช้อัตโนมัติเป็นเสียงภาษาไทย
                       </p>
                     </div>
@@ -518,22 +604,20 @@ export default function DashboardView() {
                 {/* Highlights word bank */}
                 <div className="space-y-3">
                   <label className="text-xs font-semibold uppercase tracking-wider text-[#a1a1aa] block font-mono">คีย์เวิร์ดเน้นสีสันตรวจสอบระบบ</label>
-                  <p className="text-[11px] text-zinc-500">ความคิดเห็นที่มีคำหรือคำพ้องตรงกับตรงนี้ ตัวบล็อกจะกะพริบเรืองรองในหน้าจอเพื่อดึงดูดสายตาเป็นพิเศษ</p>
+                  <p className="text-[11px] text-zinc-500">ความคิดเห็นที่มีคำหรือคำพ้องตรงกับตรงนี้ ตัวบล็อกหรือแชทจะแสดงสว่างเป็นพิเศษเพื่อดึงดูดความสนใจ</p>
                   
                   <div className="flex gap-2">
                     <input 
                       type="text" 
-                      placeholder="ใส่คำสำคัญที่ต้องการตรวจสอบ (เช่น แจกไอเทม...)..."
+                      placeholder="ระบุคำสำคัญ (เช่น: สวย, แจก, อวด)..."
                       value={keywordInput}
                       onChange={e => setKeywordInput(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleAddKeyword()}
-                      className="flex-grow bg-[#18181b] border border-[#27272a] rounded-none px-3 py-1.5 text-xs text-white font-mono"
-                      id="keyword-input-field"
+                      className="flex-grow bg-[#18181b] border border-zinc-800 rounded-none px-3 py-1.5 text-xs text-white font-mono"
                     />
                     <button 
                       onClick={handleAddKeyword}
-                      className="bg-indigo-600 hover:bg-indigo-500 text-white font-mono px-4 rounded-none text-xs"
-                      id="add-keyword-btn"
+                      className="bg-[#27272a] hover:bg-[#3f3f46] text-white font-mono px-4 rounded-none text-xs"
                     >
                       เพิ่มคำ
                     </button>
@@ -542,7 +626,7 @@ export default function DashboardView() {
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {settings.highlightKeywords.map(kw => (
                       <span 
-                        key={kw} 
+                        key={kw}
                         className="bg-indigo-950/80 text-indigo-300 px-2.5 py-1 text-xs font-mono font-bold border border-indigo-900/50 flex items-center gap-1.5 rounded-none"
                       >
                         {kw}
@@ -599,26 +683,61 @@ export default function DashboardView() {
           </div>
 
           {/* Core copy link panel at the bottom of configurations */}
-          <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-450 font-mono">OBS Browser Source URL</h4>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-none p-2 flex items-center justify-between gap-2 overflow-hidden">
-              <span className="font-mono text-[11px] text-zinc-400 truncate flex-1 min-w-0 pr-2">
-                {generatedOverlayUrl}
-              </span>
-              <button 
-                onClick={copyToClipboard}
-                className={`py-1.5 px-3 rounded-none text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
-                  copied 
-                    ? 'bg-emerald-600 text-white' 
-                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
-                }`}
-              >
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Clipboard className="w-3.5 h-3.5" />}
-                {copied ? 'Copied!' : 'Copy'}
-              </button>
+          <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-4">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 font-mono flex items-center gap-1.5 mb-1.5">
+                <Sliders className="w-3.5 h-3.5" /> OBS ลิงก์ที่ 1: กล่องแชทและกิจกรรมปกติ
+              </h4>
+              <p className="text-[10px] text-zinc-500 font-mono uppercase mb-2">
+                Chat & Events Overlay (excludes image highlights)
+              </p>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-none p-2 flex items-center justify-between gap-2 overflow-hidden">
+                <span className="font-mono text-[11px] text-zinc-400 truncate flex-1 min-w-0 pr-2">
+                  {chatAlertsOverlayUrl}
+                </span>
+                <button 
+                  onClick={copyChatToClipboard}
+                  className={`py-1.5 px-3 rounded-none text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
+                    copiedChat 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
+                  }`}
+                  id="copy-chat-overlay-btn"
+                >
+                  {copiedChat ? <Check className="w-3.5 h-3.5" /> : <Clipboard className="w-3.5 h-3.5" />}
+                  {copiedChat ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
             </div>
-            <p className="text-[10px] text-zinc-550 font-mono text-center leading-normal uppercase">
-              Drag & copy this link into OBS Studio as a browser source.
+
+            <div className="pt-1.5 border-t border-zinc-900">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#da2a7a] font-mono flex items-center gap-1.5 mb-1.5">
+                <Image className="w-3.5 h-3.5 text-pink-400" /> OBS ลิงก์ที่ 2: แสดงรูปภาพโดยเฉพาะ
+              </h4>
+              <p className="text-[10px] text-zinc-550 font-mono uppercase mb-2">
+                Dedicated Shared Image Showcase Overlay
+              </p>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-none p-2 flex items-center justify-between gap-2 overflow-hidden">
+                <span className="font-mono text-[11px] text-zinc-400 truncate flex-1 min-w-0 pr-2">
+                  {imagesOnlyOverlayUrl}
+                </span>
+                <button 
+                  onClick={copyImagesToClipboard}
+                  className={`py-1.5 px-3 rounded-none text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
+                    copiedImages 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-[#da2a7a] hover:bg-[#b01e5d] text-white shadow-sm'
+                  }`}
+                  id="copy-images-overlay-btn"
+                >
+                  {copiedImages ? <Check className="w-3.5 h-3.5" /> : <Clipboard className="w-3.5 h-3.5" />}
+                  {copiedImages ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            <p className="text-[9.5px] text-zinc-650 font-mono text-center leading-normal uppercase pt-1">
+              Add either or both as browser sources inside OBS Studio to split features.
             </p>
           </div>
         </section>
@@ -775,6 +894,12 @@ export default function DashboardView() {
                   className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-lime-600/20 bg-zinc-950 text-lime-400 hover:bg-zinc-900/60 hover:text-white transition-all text-left text-xs col-span-2 text-[10.5px] font-mono uppercase tracking-tight"
                 >
                   <Share2 className="w-3.5 h-3.5 text-lime-450 shrink-0" /> จำลองคนแชร์ไลฟ์
+                </button>
+                <button 
+                  onClick={simulateSendImage}
+                  className="flex items-center gap-1.5 py-2 px-2.5 rounded-none border border-pink-600/20 bg-zinc-950 text-pink-400 hover:bg-zinc-900/60 hover:text-white transition-all text-left text-xs col-span-2 text-[10.5px] font-mono uppercase tracking-tight"
+                >
+                  <Image className="w-3.5 h-3.5 text-pink-400 shrink-0" /> จำลองผู้ชมส่งรูปภาพ 🖼️✨
                 </button>
               </div>
             </div>

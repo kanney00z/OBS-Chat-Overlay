@@ -103,6 +103,57 @@ class SoundSynth {
       console.warn('Audio synthesis failed:', e);
     }
   }
+
+  // A double-click shutter sound followed by white noise shimmer for camera snapshots
+  playPhotoFlash() {
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+
+      const now = this.ctx.currentTime;
+      
+      // Shutter click 1 (high frequency snap)
+      const osc1 = this.ctx.createOscillator();
+      const gain1 = this.ctx.createGain();
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(1400, now);
+      osc1.frequency.exponentialRampToValueAtTime(200, now + 0.02);
+      gain1.gain.setValueAtTime(0.12, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+      osc1.connect(gain1);
+      gain1.connect(this.ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.04);
+
+      // Shutter click 2 (slightly offset bounce)
+      const osc2 = this.ctx.createOscillator();
+      const gain2 = this.ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(1200, now + 0.06);
+      osc2.frequency.exponentialRampToValueAtTime(250, now + 0.08);
+      gain2.gain.setValueAtTime(0.12, now + 0.06);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      osc2.connect(gain2);
+      gain2.connect(this.ctx.destination);
+      osc2.start(now + 0.06);
+      osc2.stop(now + 0.1);
+
+      // Flash charging/discharge sweep
+      const osc3 = this.ctx.createOscillator();
+      const gain3 = this.ctx.createGain();
+      osc3.type = 'sine';
+      osc3.frequency.setValueAtTime(400, now + 0.1);
+      osc3.frequency.exponentialRampToValueAtTime(2200, now + 0.35);
+      gain3.gain.setValueAtTime(0.06, now + 0.1);
+      gain3.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc3.connect(gain3);
+      gain3.connect(this.ctx.destination);
+      osc3.start(now + 0.1);
+      osc3.stop(now + 0.41);
+    } catch (e) {
+      console.warn('Audio synthesis failed:', e);
+    }
+  }
 }
 
 export const soundSynth = new SoundSynth();

@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquare, Heart, Gift, UserPlus, Share2, Shield, Star, Award, WifiOff, Volume2 } from 'lucide-react';
+import { MessageSquare, Heart, Gift, UserPlus, Share2, Shield, Star, Award, WifiOff, Volume2, Image, Sparkles, Camera } from 'lucide-react';
 import { ChatMessage, AlertEvent, OverlaySettings, OverlayTheme } from '../types';
 import { soundSynth } from '../utils/audio';
 
@@ -30,6 +30,7 @@ interface Particle {
 export default function OverlayView({ settingsOverride, isDemo = false }: OverlayViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeAlert, setActiveAlert] = useState<AlertEvent | null>(null);
+  const [imageShareAlert, setImageShareAlert] = useState<ChatMessage | null>(null);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
   const wsRef = useRef<WebSocket | null>(null);
@@ -56,7 +57,9 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       highlightKeywords: ['obs', 'indofinity', 'stream', 'highlight'],
       ignoredUsers: [],
       animationStyle: 'slide-up',
-      testChannelName: 'IndoFinity Streamer'
+      testChannelName: 'IndoFinity Streamer',
+      showImageAlerts: true,
+      mode: 'all'
     };
 
     // If we've got override parameters (from the Dashboard live-preview), use those
@@ -81,7 +84,9 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         highlightKeywords: searchParams.get('highlightKeywords')?.split(',') || defaultSettings.highlightKeywords,
         ignoredUsers: searchParams.get('ignoredUsers')?.split(',') || defaultSettings.ignoredUsers,
         animationStyle: (searchParams.get('animationStyle') as any) || defaultSettings.animationStyle,
-        testChannelName: defaultSettings.testChannelName
+        testChannelName: defaultSettings.testChannelName,
+        showImageAlerts: searchParams.get('showImageAlerts') !== 'false',
+        mode: (searchParams.get('mode') as any) || 'all'
       };
       return parsed;
     } catch {
@@ -114,12 +119,14 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
   };
 
   // Sound triggering helper
-  const triggerSound = (type: 'chat' | 'alert' | 'gift') => {
+  const triggerSound = (type: 'chat' | 'alert' | 'gift' | 'image') => {
     if (!settings.alertSounds) return;
     if (type === 'chat') {
       soundSynth.playPop();
     } else if (type === 'gift') {
       soundSynth.playGiftCoin();
+    } else if (type === 'image') {
+      soundSynth.playPhotoFlash();
     } else {
       soundSynth.playAlertChime();
     }
@@ -213,6 +220,14 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     const timestamp = Date.now();
     const messageObj: ChatMessage = { ...newMessage, id, timestamp };
 
+    // Filter messages based on active Overlay Mode
+    if (settings.mode === 'images_only' && messageObj.type !== 'share_image') {
+      return;
+    }
+    if (settings.mode === 'chat_alerts' && messageObj.type === 'share_image') {
+      return;
+    }
+
     // 1. Audit filters
     if (settings.ignoredUsers.some(user => user.toLowerCase() === newMessage.uniqueId.toLowerCase())) {
       return;
@@ -228,6 +243,8 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       triggerSound('chat');
     } else if (messageObj.type === 'gift') {
       triggerSound('gift');
+    } else if (messageObj.type === 'share_image') {
+      triggerSound('image');
     } else {
       triggerSound('alert');
     }
@@ -239,19 +256,27 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       triggerTTS(`${messageObj.nickname} ส่งของขวัญ ${messageObj.giftName}!`);
     } else if (messageObj.type === 'follow' && settings.textToSpeech) {
       triggerTTS(`${messageObj.nickname} กดติดตามสตรีมของคุณแล้ว!`);
+    } else if (messageObj.type === 'share_image' && settings.textToSpeech) {
+      triggerTTS(`${messageObj.nickname} ส่งรูปภาพและบอกว่า ${messageObj.comment || ''}`);
     }
 
-    // 4. Update core comments stack
-    setMessages(prev => {
-      const merged = [...prev, messageObj];
-      if (merged.length > settings.maxMessages) {
-        return merged.slice(merged.length - settings.maxMessages);
-      }
-      return merged;
-    });
+    // 4. Update core comments stack or image alerts stack
+    if (messageObj.type === 'share_image' && settings.showImageAlerts !== false) {
+      setImageShareAlert(messageObj);
+      // Sparkle burst on the right side for the image notification card
+      generateSparkleBurst(window.innerWidth - 180, 180, settings.theme);
+    } else {
+      setMessages(prev => {
+        const merged = [...prev, messageObj];
+        if (merged.length > settings.maxMessages) {
+          return merged.slice(merged.length - settings.maxMessages);
+        }
+        return merged;
+      });
+    }
 
     // 5. Construct Visual Alert Banner for crucial events (Follow, Gift, Share, Like above 5x)
-    if (messageObj.type !== 'chat') {
+    if (messageObj.type !== 'chat' && messageObj.type !== 'share_image') {
       let detailText = '';
       if (messageObj.type === 'gift') {
         detailText = `ส่งของขวัญ ${messageObj.giftName} x${messageObj.repeatCount || 1}!`;
@@ -314,6 +339,16 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
     return () => clearTimeout(timer);
   }, [activeAlert]);
+
+  // Image Alert Auto-Dismiss timer
+  useEffect(() => {
+    if (!imageShareAlert) return;
+    const timer = setTimeout(() => {
+      setImageShareAlert(null);
+    }, 9500); // Image alerts persist 9.5 seconds
+
+    return () => clearTimeout(timer);
+  }, [imageShareAlert]);
 
   // Establish actual stream WebSocket connection (Unless pure Demo)
   useEffect(() => {
@@ -388,6 +423,15 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                 uniqueId: eventData.uniqueId || 'sharer',
                 nickname: eventData.nickname || eventData.uniqueId || 'Sharer',
                 profilePictureUrl: eventData.profilePictureUrl || undefined
+              });
+            } else if (streamEvent === 'share_image' || streamEvent === 'image') {
+              handleIncomingMessage({
+                type: 'share_image',
+                uniqueId: eventData.uniqueId || 'image_sender',
+                nickname: eventData.nickname || eventData.uniqueId || 'Image Sender',
+                comment: eventData.comment || eventData.commentText || '',
+                profilePictureUrl: eventData.profilePictureUrl || undefined,
+                imageUrl: eventData.imageUrl || eventData.image || ''
               });
             }
           } catch (err) {
@@ -748,134 +792,300 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         </AnimatePresence>
       </div>
 
-      {/* Primary chat scroll container - bottom aligned */}
-      <div 
-        className="w-full max-w-md flex flex-col pointer-events-none self-start relative z-20 overflow-y-auto"
-        style={{ fontSize: `${settings.fontSize}px`, maxHeight: '75vh' }}
-        id="chat-scroller"
-      >
-        <AnimatePresence initial={false}>
-          {messages.map((msg, index) => {
-            const hasPfp = settings.showAvatars && !!msg.profilePictureUrl;
-            const t = getThemeClasses(msg);
-            const isHighlighted = msg.comment && settings.highlightKeywords.some(kw => msg.comment?.toLowerCase().includes(kw.toLowerCase()));
-
-            return (
-              <motion.div
-                key={msg.id}
-                layout
-                variants={getAnimationVariants()}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                transition={{ duration: 0.25, layout: { type: 'spring', stiffness: 500, damping: 45 } }}
-                id={`chat-msg-${msg.id}`}
-              >
-                <div className={t.wrapper}>
-                  {/* Glass shimmer overlay for special notifications */}
-                  {settings.theme === 'cyberpunk' && msg.type !== 'chat' && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-                  )}
-
-                  {/* Profile Image avatar if setting checked */}
-                  {hasPfp ? (
-                    <img 
-                      src={msg.profilePictureUrl} 
-                      alt=""
-                      referrerPolicy="no-referrer"
-                      className="w-8 h-8 rounded-full border border-white/20 shadow flex-shrink-0 object-cover mt-[2px]" 
-                    />
-                  ) : (
-                    // Default Fallback avatar
-                    settings.showAvatars && (
-                      <div 
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-inner flex-shrink-0 mt-[2px]"
-                        style={{ backgroundColor: getUserColor(msg.uniqueId) }}
-                      >
-                        {msg.nickname.charAt(0).toUpperCase()}
-                      </div>
-                    )
-                  )}
-
-                  <div className="flex-1 min-w-0" style={{ fontSize: `${settings.fontSize}px` }}>
-                    {/* Username line with possible stream badges */}
-                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                      {/* Show structural custom badges if setting enabled */}
-                      {settings.showBadges && (
-                        <>
-                          {msg.isModerator && (
-                            <span className={t.badge} title="Moderator">
-                              <Shield className={`w-3 h-3 ${settings.theme === 'cyberpunk' ? 'text-[#00F0FF]' : 'text-green-400'}`} />
-                              <span className={`ml-0.5 text-[8.5px] font-mono leading-none ${t.badgeText}`}>MOD</span>
-                            </span>
-                          )}
-                          {msg.isSubscriber && (
-                            <span className={t.badge} title="Subscriber">
-                              <Star className={`w-3 h-3 ${settings.theme === 'cyberpunk' ? 'text-pink-500' : 'text-amber-400'}`} />
-                              <span className={`ml-0.5 text-[8.5px] font-mono leading-none ${t.badgeText}`}>SUB</span>
-                            </span>
-                          )}
-                          {msg.isVip && (
-                            <span className={t.badge} title="VIP">
-                              <Award className="w-3 h-3 text-purple-400" />
-                              <span className={`ml-0.5 text-[8.5px] font-mono leading-none ${t.badgeText}`}>VIP</span>
-                            </span>
-                          )}
-                        </>
-                      )}
-
-                      {/* Display name */}
-                      <span 
-                        className={t.name}
-                        style={{ color: settings.theme === 'twitch' ? getUserColor(msg.uniqueId) : undefined }}
-                      >
-                        {msg.nickname}
-                      </span>
-
-                      {/* Unique tag */}
-                      <span className="opacity-45 text-[10px] font-mono lowercase truncate max-w-[80px]">
-                        @{msg.uniqueId}
-                      </span>
+      {/* Floating separate Shared Image notification card on the right-hand side */}
+      <div className="absolute top-24 right-6 flex flex-col items-end pointer-events-none z-30 max-w-[280px]">
+        <AnimatePresence mode="wait">
+          {imageShareAlert && (
+            <motion.div
+              initial={{ opacity: 0, x: 100, scale: 0.8 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 120, scale: 0.7, transition: { duration: 0.25 } }}
+              className="pointer-events-auto shadow-2xl"
+              id={`image-alert-${imageShareAlert.id}`}
+            >
+              {/* Separate style designs depending on the active Theme selection */}
+              {settings.theme === 'geometric' && (
+                <div className="relative bg-[#0c0c0e]/95 border border-zinc-800 border-l-2 border-l-pink-500 p-4 shadow-2xl flex flex-col gap-2.5 w-[260px]">
+                  <div className="flex justify-between items-center bg-zinc-900 border border-zinc-800 px-2 py-1 text-pink-400">
+                    <div className="flex items-center gap-1.5 font-mono text-[9px] font-extrabold uppercase tracking-widest text-zinc-350">
+                      <Camera className="w-3.5 h-3.5 animate-pulse" /> ผู้ชมแชร์รูปภาพ
                     </div>
-
-                    {/* Chat Text Body or Specific Alert Details inline */}
-                    <div className={t.body}>
-                      {msg.type === 'chat' ? (
-                        <p className={isHighlighted ? 'text-yellow-250 font-medium' : ''}>
-                          {msg.comment}
-                        </p>
-                      ) : msg.type === 'gift' ? (
-                        <div className="flex items-center gap-1 bg-amber-900/15 text-amber-500 border border-amber-500/10 px-1.5 py-1 rounded inline-flex">
-                          {msg.giftIcon ? (
-                            <img src={msg.giftIcon} alt="" className="w-5 h-5 flex-shrink-0" referrerPolicy="no-referrer" />
-                          ) : (
-                            <Gift className="w-4 h-4 flex-shrink-0 animate-bounce" />
-                          )}
-                          <span className="font-semibold text-[13px]">
-                            ส่งของขวัญ {msg.giftName} <strong className="text-amber-400 text-[14px]">x{msg.repeatCount}</strong> ชิ้น!
-                          </span>
-                        </div>
-                      ) : msg.type === 'follow' ? (
-                        <span className="text-cyan-400 font-semibold flex items-center gap-1 py-0.5">
-                          <UserPlus className="w-3.5 h-3.5 flex-shrink-0 inline" /> ได้กดติดตามสตรีมสดแล้ว!
-                        </span>
-                      ) : msg.type === 'like' ? (
-                        <span className="text-rose-400 font-semibold flex items-center gap-1 py-0.5">
-                          <Heart className="w-3.5 h-3.5 flex-shrink-0 inline fill-rose-500 text-rose-500" /> ถูกใจสตรีมสดแล้ว (x{msg.likeCount})!
-                        </span>
-                      ) : (
-                        <span className="text-lime-400 font-semibold flex items-center gap-1 py-0.5">
-                          <Share2 className="w-3.5 h-3.5 flex-shrink-0 inline" /> ได้ช่วยแชร์สตรีมสดแล้ว!
-                        </span>
-                      )}
-                    </div>
+                    <span className="font-mono text-[8px] border border-pink-500/35 px-1.5 py-0.5 text-pink-400 font-bold">LIVE</span>
+                  </div>
+                  <div className="relative border border-zinc-850 bg-black aspect-video overflow-hidden">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="space-y-0.5 min-w-0">
+                    <span className="font-mono text-[11px] font-bold text-pink-400 block truncate">@{imageShareAlert.nickname}</span>
+                    {imageShareAlert.comment && (
+                      <span className="font-sans text-[11.5px] leading-snug text-zinc-400 block max-h-16 overflow-hidden text-ellipsis line-clamp-3 italic">
+                        "{imageShareAlert.comment}"
+                      </span>
+                    )}
                   </div>
                 </div>
-              </motion.div>
-            );
-          })}
+              )}
+
+              {settings.theme === 'cyberpunk' && (
+                <div className="relative bg-slate-950/95 border-2 border-[#00F0FF] p-4 rounded shadow-[0_0_20px_rgba(0,240,255,0.35)] flex flex-col gap-3 w-[260px] overflow-hidden">
+                  <div className="absolute top-0 right-0 w-2 h-2 bg-[#00F0FF]" />
+                  <div className="absolute bottom-0 left-0 w-2 h-2 bg-pink-500" />
+                  <div className="flex items-center justify-between text-[#00F0FF] font-mono text-[9px] uppercase font-bold tracking-widest animate-pulse border-b border-[#00F0FF]/25 pb-1.5">
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" /> DETECTING PHOTO
+                    </span>
+                    <span className="text-[#00F0FF]">SYS_OK</span>
+                  </div>
+                  <div className="relative border border-[#00F0FF]/30 bg-black/95 aspect-video overflow-hidden shadow-inner flex items-center justify-center">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <div className="absolute inset-0 border border-[#00F0FF]/15 bg-[radial-gradient(transparent_60%,rgba(0,240,255,0.1))] pointer-events-none" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="font-mono text-[11px] font-extrabold text-[#FF007F] block">@{imageShareAlert.nickname.toUpperCase()}</span>
+                    {imageShareAlert.comment && (
+                      <p className="font-mono text-[10.5px] leading-snug text-slate-300 break-words max-h-12 overflow-hidden truncate whitespace-normal">
+                        &gt;&gt; {imageShareAlert.comment}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'glassmorphism' && (
+                <div className="bg-white/10 border border-white/20 backdrop-blur-xl p-4 rounded-2xl shadow-[0_12px_40px_0_rgba(255,255,255,0.06)] flex flex-col gap-3 w-[260px]">
+                  <div className="flex items-center gap-2 text-white/90">
+                    <div className="bg-white/10 p-1.5 rounded-full border border-white/10">
+                      <Image className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h5 className="font-semibold text-[12px] text-white">รูปภาพแชร์ล่าสุด</h5>
+                      <span className="text-[10px] text-white/65 block">ส่งโดย @{imageShareAlert.nickname}</span>
+                    </div>
+                  </div>
+                  <div className="relative rounded-xl overflow-hidden aspect-video bg-black/30 border border-white/10">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  {imageShareAlert.comment && (
+                    <p className="text-[11px] text-white/95 leading-normal italic bg-white/5 p-2 rounded-lg border border-white/5 max-h-14 overflow-hidden">
+                      "{imageShareAlert.comment}"
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {settings.theme === 'bubblechat' && (
+                <div className="bg-gradient-to-br from-amber-400 to-amber-300 text-slate-900 p-4 rounded-3xl shadow-2xl flex flex-col gap-2.5 w-[250px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold text-slate-800 uppercase tracking-widest flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-slate-900 shrink-0" /> ผู้ชมทำรายการแชร์รูป
+                    </span>
+                    <div className="w-2 h-2 bg-emerald-600 rounded-full animate-ping" />
+                  </div>
+                  <div className="relative rounded-2xl overflow-hidden aspect-video bg-slate-900 border-2 border-slate-900">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="text-slate-950 font-sans">
+                    <span className="text-[12px] font-bold block">@{imageShareAlert.nickname}</span>
+                    {imageShareAlert.comment && (
+                      <p className="text-[11px] font-medium leading-snug mt-0.5 opacity-90 pl-1.5 border-l-2 border-slate-900/60 truncate">
+                        {imageShareAlert.comment}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'minimal' && (
+                <div className="bg-black/90 backdrop-blur-md border border-neutral-800 p-3.5 rounded-xl shadow-2xl flex flex-col gap-2.5 w-[250px]">
+                  <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-neutral-400 border-b border-neutral-800 pb-1.5">
+                    <Image className="w-3.5 h-3.5 text-pink-500" /> Share by @{imageShareAlert.nickname}
+                  </div>
+                  <div className="relative rounded-md overflow-hidden aspect-video bg-neutral-900">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  {imageShareAlert.comment && (
+                    <p className="text-[11px] text-neutral-350 leading-relaxed font-sans px-1 truncate">
+                      "{imageShareAlert.comment}"
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {settings.theme === 'retro' && (
+                <div className="bg-slate-950 border-4 border-yellow-400 p-4 rounded-none shadow-[5px_5px_0_0_rgba(0,0,0,1)] flex flex-col gap-3 w-[260px] font-mono">
+                  <div className="bg-yellow-950/20 border-2 border-yellow-400 px-2 py-1 text-center text-yellow-400 text-[9px] font-extrabold uppercase animate-pulse">
+                    [ ! NEW IMAGE EVENT ! ]
+                  </div>
+                  <div className="relative border-2 border-yellow-400 bg-black aspect-video overflow-hidden rounded-none shadow-md">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" style={{ imageRendering: 'pixelated' }} referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="text-white min-w-0">
+                    <span className="text-[11.5px] font-extrabold text-lime-400 block truncate">@{imageShareAlert.nickname.toUpperCase()}</span>
+                    {imageShareAlert.comment && (
+                      <p className="text-[10px] text-slate-350 leading-snug mt-1 uppercase truncate">
+                        &gt; {imageShareAlert.comment}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'twitch' && (
+                <div className="bg-[#18181b] border-l-4 border-l-purple-500 p-4 shadow-2xl flex flex-col gap-2.5 w-[260px]">
+                  <div className="flex items-center gap-2 font-sans border-b border-zinc-800 pb-2">
+                    <div className="bg-purple-950/30 p-1.5 rounded text-purple-400">
+                      <Camera className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h5 className="text-[9px] text-purple-400 font-extrabold tracking-wide uppercase">แชร์รูปภาพสตรีม</h5>
+                      <span className="text-[11.5px] font-bold text-white block truncate">@{imageShareAlert.nickname}</span>
+                    </div>
+                  </div>
+                  <div className="relative rounded bg-black aspect-video overflow-hidden">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  {imageShareAlert.comment && (
+                    <p className="text-[11px] text-zinc-300 font-normal leading-normal py-1 px-1.5 bg-zinc-900 rounded font-sans italic border-l-2 border-zinc-700 truncate">
+                      "{imageShareAlert.comment}"
+                    </p>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
+
+      {/* Primary chat scroll container - bottom aligned */}
+      {settings.mode !== 'images_only' && (
+        <div 
+          className="w-full max-w-md flex flex-col pointer-events-none self-start relative z-20 overflow-y-auto"
+          style={{ fontSize: `${settings.fontSize}px`, maxHeight: '75vh' }}
+          id="chat-scroller"
+        >
+          <AnimatePresence initial={false}>
+            {messages.map((msg, index) => {
+              const hasPfp = settings.showAvatars && !!msg.profilePictureUrl;
+              const t = getThemeClasses(msg);
+              const isHighlighted = msg.comment && settings.highlightKeywords.some(kw => msg.comment?.toLowerCase().includes(kw.toLowerCase()));
+
+              return (
+                <motion.div
+                  key={msg.id}
+                  layout
+                  variants={getAnimationVariants()}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ duration: 0.25, layout: { type: 'spring', stiffness: 500, damping: 45 } }}
+                  id={`chat-msg-${msg.id}`}
+                >
+                  <div className={t.wrapper}>
+                    {/* Glass shimmer overlay for special notifications */}
+                    {settings.theme === 'cyberpunk' && msg.type !== 'chat' && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+                    )}
+
+                    {/* Profile Image avatar if setting checked */}
+                    {hasPfp ? (
+                      <img 
+                        src={msg.profilePictureUrl} 
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        className="w-8 h-8 rounded-full border border-white/20 shadow flex-shrink-0 object-cover mt-[2px]" 
+                      />
+                    ) : (
+                      // Default Fallback avatar
+                      settings.showAvatars && (
+                        <div 
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-inner flex-shrink-0 mt-[2px]"
+                          style={{ backgroundColor: getUserColor(msg.uniqueId) }}
+                        >
+                          {msg.nickname.charAt(0).toUpperCase()}
+                        </div>
+                      )
+                    )}
+
+                    <div className="flex-1 min-w-0" style={{ fontSize: `${settings.fontSize}px` }}>
+                      {/* Username line with possible stream badges */}
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                        {/* Show structural custom badges if setting enabled */}
+                        {settings.showBadges && (
+                          <>
+                            {msg.isModerator && (
+                              <span className={t.badge} title="Moderator">
+                                <Shield className={`w-3 h-3 ${settings.theme === 'cyberpunk' ? 'text-[#00F0FF]' : 'text-green-400'}`} />
+                                <span className={`ml-0.5 text-[8.5px] font-mono leading-none ${t.badgeText}`}>MOD</span>
+                              </span>
+                            )}
+                            {msg.isSubscriber && (
+                              <span className={t.badge} title="Subscriber">
+                                <Star className={`w-3 h-3 ${settings.theme === 'cyberpunk' ? 'text-pink-500' : 'text-amber-400'}`} />
+                                <span className={`ml-0.5 text-[8.5px] font-mono leading-none ${t.badgeText}`}>SUB</span>
+                              </span>
+                            )}
+                            {msg.isVip && (
+                              <span className={t.badge} title="VIP">
+                                <Award className="w-3 h-3 text-purple-400" />
+                                <span className={`ml-0.5 text-[8.5px] font-mono leading-none ${t.badgeText}`}>VIP</span>
+                              </span>
+                            )}
+                          </>
+                        )}
+
+                        {/* Display name */}
+                        <span 
+                          className={t.name}
+                          style={{ color: settings.theme === 'twitch' ? getUserColor(msg.uniqueId) : undefined }}
+                        >
+                          {msg.nickname}
+                        </span>
+
+                        {/* Unique tag */}
+                        <span className="opacity-45 text-[10px] font-mono lowercase truncate max-w-[80px]">
+                          @{msg.uniqueId}
+                        </span>
+                      </div>
+
+                      {/* Chat Text Body or Specific Alert Details inline */}
+                      <div className={t.body}>
+                        {msg.type === 'chat' ? (
+                          <p className={isHighlighted ? 'text-yellow-250 font-medium' : ''}>
+                            {msg.comment}
+                          </p>
+                        ) : msg.type === 'gift' ? (
+                          <div className="flex items-center gap-1 bg-amber-900/15 text-amber-500 border border-amber-500/10 px-1.5 py-1 rounded inline-flex">
+                            {msg.giftIcon ? (
+                              <img src={msg.giftIcon} alt="" className="w-5 h-5 flex-shrink-0" referrerPolicy="no-referrer" />
+                            ) : (
+                              <Gift className="w-4 h-4 flex-shrink-0 animate-bounce" />
+                            )}
+                            <span className="font-semibold text-[13px]">
+                              ส่งของขวัญ {msg.giftName} <strong className="text-amber-400 text-[14px]">x{msg.repeatCount}</strong> ชิ้น!
+                            </span>
+                          </div>
+                        ) : msg.type === 'follow' ? (
+                          <span className="text-cyan-400 font-semibold flex items-center gap-1 py-0.5">
+                            <UserPlus className="w-3.5 h-3.5 flex-shrink-0 inline" /> ได้กดติดตามสตรีมสดแล้ว!
+                          </span>
+                        ) : msg.type === 'like' ? (
+                          <span className="text-rose-400 font-semibold flex items-center gap-1 py-0.5">
+                            <Heart className="w-3.5 h-3.5 flex-shrink-0 inline fill-rose-500 text-rose-500" /> ถูกใจสตรีมสดแล้ว (x{msg.likeCount})!
+                          </span>
+                        ) : (
+                          <span className="text-lime-400 font-semibold flex items-center gap-1 py-0.5">
+                            <Share2 className="w-3.5 h-3.5 flex-shrink-0 inline" /> ได้ช่วยแชร์สตรีมสดแล้ว!
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
 
       <style>{`
         @keyframes shimmer {
