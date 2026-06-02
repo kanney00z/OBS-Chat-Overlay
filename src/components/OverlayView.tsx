@@ -63,7 +63,9 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       mode: 'all',
       vectorAvatarSpeed: 1.0,
       hideAvatarsWhenNoViewers: false,
-      testViewerCount: 1
+      testViewerCount: 1,
+      hideWhenIdle: true,
+      idleTimeout: 60
     };
 
     // Load from localStorage as a fail-safe fallback
@@ -105,7 +107,9 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         customAvatars: savedSettings.customAvatars || defaultSettings.customAvatars,
         vectorAvatarSpeed: searchParams.has('vectorAvatarSpeed') ? Number(searchParams.get('vectorAvatarSpeed')) : (savedSettings.vectorAvatarSpeed !== undefined ? savedSettings.vectorAvatarSpeed : 1.0),
         hideAvatarsWhenNoViewers: searchParams.has('hideAvatarsWhenNoViewers') ? searchParams.get('hideAvatarsWhenNoViewers') === 'true' : (savedSettings.hideAvatarsWhenNoViewers !== undefined ? savedSettings.hideAvatarsWhenNoViewers : false),
-        testViewerCount: searchParams.has('testViewerCount') ? Number(searchParams.get('testViewerCount')) : (savedSettings.testViewerCount !== undefined ? savedSettings.testViewerCount : 1)
+        testViewerCount: searchParams.has('testViewerCount') ? Number(searchParams.get('testViewerCount')) : (savedSettings.testViewerCount !== undefined ? savedSettings.testViewerCount : 1),
+        hideWhenIdle: searchParams.has('hideWhenIdle') ? searchParams.get('hideWhenIdle') === 'true' : (savedSettings.hideWhenIdle !== undefined ? savedSettings.hideWhenIdle : true),
+        idleTimeout: searchParams.has('idleTimeout') ? Number(searchParams.get('idleTimeout')) : (savedSettings.idleTimeout !== undefined ? savedSettings.idleTimeout : 60)
       };
       return parsed;
     } catch {
@@ -163,6 +167,24 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     return settings.testViewerCount !== undefined ? settings.testViewerCount : 1;
   });
 
+  const [lastActivity, setLastActivity] = useState<number>(0);
+  const [isIdle, setIsIdle] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (!settings.hideWhenIdle) {
+      setIsIdle(false);
+      return;
+    }
+    const checkIdle = () => {
+      const unusedTime = Date.now() - lastActivity;
+      const timeoutMs = (settings.idleTimeout ?? 60) * 1000;
+      setIsIdle(unusedTime >= timeoutMs);
+    };
+    checkIdle();
+    const interval = setInterval(checkIdle, 1000);
+    return () => clearInterval(interval);
+  }, [lastActivity, settings.hideWhenIdle, settings.idleTimeout]);
+
   useEffect(() => {
     if (settings.testViewerCount !== undefined) {
       setActiveViewers(settings.testViewerCount);
@@ -185,47 +207,18 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
   useEffect(() => {
     const pool = getAvatarPool();
     setAvatars(prev => {
-      const poolIds = pool.map(item => item.id);
-      
-      // Filter out any older configured avatars that are no longer in pool
-      // But KEEP viewer-specific avatars that spawned dynamically on chat (usually id starts with "chatter_")
-      const viewerAvatars = prev.filter(av => av.id.startsWith('chatter_') || av.id.startsWith('bot_') || !poolIds.includes(av.id));
-      
-      // Map pool items into walking avatars
-      const configuredAvatars = pool.map((item, index) => {
-        const existing = prev.find(av => av.id === item.id);
-        if (existing) {
-          // Keep existing physics status but sync latest sprite scale/url
+      // Sync scale/spriteUrl of existing avatars if changed in settings pool, rather than spawning the entire pool by default
+      return prev.map(av => {
+        const matchingPoolItem = pool.find(item => item.id === av.id || (av.uniqueId && av.uniqueId.toLowerCase().includes(item.name.toLowerCase().replace(/\s+/g, '_'))));
+        if (matchingPoolItem) {
           return {
-            ...existing,
-            spriteUrl: item.spriteUrl,
-            scale: item.scale || 1.15
+            ...av,
+            spriteUrl: matchingPoolItem.spriteUrl,
+            scale: matchingPoolItem.scale || 1.15
           };
         }
-        
-        // Spawn brand new avatar with a cute leap
-        const rSpeedIndex = Math.random() > 0.5 ? 1 : -1;
-        const defaultPositions = [15, 32, 48, 65, 80, 92];
-        const posX = defaultPositions[index % defaultPositions.length] + (Math.random() * 8 - 4);
-        
-        return {
-          id: item.id,
-          uniqueId: (item.name || 'avatar').toLowerCase().replace(/\s+/g, '_') + '_' + item.id,
-          nickname: item.name.includes('(') ? item.name.split('(')[0].trim() : item.name,
-          x: Math.max(4, Math.min(96, posX)),
-          y: 0,
-          vx: (Math.random() * 0.08 + 0.07) * rSpeedIndex,
-          vy: -6 - Math.random() * 4, // cute spawn leap!
-          facing: rSpeedIndex > 0 ? 'right' as const : 'left' as const,
-          isJumping: true,
-          spriteUrl: item.spriteUrl,
-          scale: item.scale || 1.15,
-          bubbleText: index === 0 ? 'สวัสดีค้าบ ยินดีต้อนรับสู่แชทอวตารดึ๋งดั๋ง 💕' : '',
-          bubbleTime: index === 0 ? Date.now() + 6000 : 0
-        };
+        return av;
       });
-
-      return [...configuredAvatars, ...viewerAvatars.slice(0, 6)];
     });
   }, [settings.customAvatars]);
 
@@ -400,6 +393,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
   // Set up Message Handlers
   const handleIncomingMessage = (newMessage: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+    setLastActivity(Date.now());
     const id = Math.random().toString(36).substr(2, 9);
     const timestamp = Date.now();
     const messageObj: ChatMessage = { ...newMessage, id, timestamp };
@@ -471,7 +465,22 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       const msgNickname = messageObj.nickname;
       const msgComment = messageObj.comment || '';
 
-      if (msgComment && messageObj.type === 'chat') {
+      let avatarBubbleText = '';
+      if (messageObj.type === 'chat') {
+        avatarBubbleText = msgComment;
+      } else if (messageObj.type === 'gift') {
+        avatarBubbleText = `ส่งของขวัญ ${messageObj.giftName} x${messageObj.repeatCount || 1}! 🎁`;
+      } else if (messageObj.type === 'follow') {
+        avatarBubbleText = `ผู้ติดตามใหม่คนสำคัญครับ! 💖`;
+      } else if (messageObj.type === 'like') {
+        avatarBubbleText = `ถูกใจสตรีมสดแล้วนะค้าบ (x${messageObj.likeCount || 1})! 👍`;
+      } else if (messageObj.type === 'share') {
+        avatarBubbleText = `แชร์ไลฟ์สดนี้ให้แล้วนะค้าบ! 🚀`;
+      } else if (messageObj.type === 'share_image') {
+        avatarBubbleText = `ส่งของขวัญรูปภาพเด็ดๆ ให้ชม! 🖼️ ${msgComment ? `"${msgComment}"` : ''}`;
+      }
+
+      if (avatarBubbleText) {
         setAvatars(prev => {
           const index = prev.findIndex(av => av.uniqueId.toLowerCase() === msgUniqueId.toLowerCase());
           
@@ -481,7 +490,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
             updated[index] = {
               ...updated[index],
               nickname: msgNickname,
-              bubbleText: msgComment,
+              bubbleText: avatarBubbleText,
               bubbleTime: Date.now() + 6500, // bubble lasts 6.5s
               vy: updated[index].isJumping ? updated[index].vy : -9 // Jump on speak!
             };
@@ -503,7 +512,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
               isJumping: true,
               spriteUrl: pool[randomSpriteIndex].spriteUrl,
               scale: pool[randomSpriteIndex].scale || 1.1,
-              bubbleText: msgComment,
+              bubbleText: avatarBubbleText,
               bubbleTime: Date.now() + 6500
             };
             const activePool = prev.length >= 15 ? prev.slice(1) : prev;
@@ -611,6 +620,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         };
 
         socket.onmessage = (event) => {
+          setLastActivity(Date.now());
           try {
             const message = JSON.parse(event.data);
             const { event: streamEvent, data: eventData } = message;
@@ -1623,7 +1633,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       {(settings.mode === 'avatars' || settings.mode === 'all') && (
         <div 
           className={`absolute inset-x-0 bottom-2 h-[220px] pointer-events-none z-30 font-sans overflow-visible select-none transition-all duration-700 ease-in-out ${
-            settings.hideAvatarsWhenNoViewers && activeViewers === 0
+            (settings.hideAvatarsWhenNoViewers && activeViewers === 0) || (settings.hideWhenIdle && isIdle)
               ? 'opacity-0 scale-95 pointer-events-none translate-y-12'
               : 'opacity-100 scale-100 translate-y-0'
           }`}

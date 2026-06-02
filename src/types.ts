@@ -27,6 +27,8 @@ export interface OverlaySettings {
   vectorAvatarSpeed?: number;
   hideAvatarsWhenNoViewers?: boolean;
   testViewerCount?: number;
+  hideWhenIdle?: boolean;
+  idleTimeout?: number; // in seconds, hides avatars if no chat/activity
 }
 
 export interface ChatMessage {

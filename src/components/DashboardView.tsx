@@ -8,7 +8,7 @@ import {
   Settings, Sliders, Play, Laptop, Clipboard, Check, HelpCircle, 
   MessageSquare, Heart, Gift, UserPlus, Share2, Shield, Eye, EyeOff, Volume2, 
   VolumeX, RefreshCw, Sparkles, AlertCircle, Trash2, ArrowRight, Video, ListFilter, Image,
-  Users, Trash, Crown
+  Users, Trash, Crown, Clock
 } from 'lucide-react';
 import { OverlaySettings, OverlayTheme, ChatMessage } from '../types';
 import OverlayView from './OverlayView';
@@ -74,6 +74,8 @@ export default function DashboardView() {
           vectorAvatarSpeed: 1.0,
           hideAvatarsWhenNoViewers: false,
           testViewerCount: 1,
+          hideWhenIdle: true,
+          idleTimeout: 60,
           ...parsed
         };
       } catch (e) {
@@ -100,7 +102,9 @@ export default function DashboardView() {
       customAvatars: DEFAULT_AVATARS,
       vectorAvatarSpeed: 1.0,
       hideAvatarsWhenNoViewers: false,
-      testViewerCount: 1
+      testViewerCount: 1,
+      hideWhenIdle: true,
+      idleTimeout: 60
     };
   });
 
@@ -227,6 +231,8 @@ export default function DashboardView() {
     params.set('vectorAvatarSpeed', (settings.vectorAvatarSpeed ?? 1.0).toString());
     params.set('hideAvatarsWhenNoViewers', (settings.hideAvatarsWhenNoViewers ?? false).toString());
     params.set('testViewerCount', (settings.testViewerCount ?? 1).toString());
+    params.set('hideWhenIdle', (settings.hideWhenIdle ?? true).toString());
+    params.set('idleTimeout', (settings.idleTimeout ?? 60).toString());
     
     if (settings.highlightKeywords.length > 0) {
       params.set('highlightKeywords', settings.highlightKeywords.join(','));
@@ -732,6 +738,60 @@ export default function DashboardView() {
                       <span>🚀 ซิ่งไวสะท้านสตรีม (2.5x)</span>
                     </div>
                   </div>
+                </div>
+
+                {/* Auto-Hide when idle settings option */}
+                <div className="p-4 bg-zinc-900/40 border border-zinc-850 space-y-4 rounded-none">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-pink-400" />
+                      <div>
+                        <h4 className="text-xs font-bold font-mono text-zinc-200 uppercase tracking-wide">
+                          ระบบซ่อนตัวอวตารเมื่อไม่มีคนแชท/ใช้งาน (Auto-Hide on Idle)
+                        </h4>
+                        <p className="text-[10px] text-zinc-500 font-sans mt-0.5 leading-snug">
+                          ซ่อนอวตารอย่างนุ่มนวลอัตโนมัติหากไม่มีการพิมพ์แชทหรือเว้นระยะแชทนานเกินเวลาที่กำหนด (จะปรากฏตัวอีกครั้งทันทีเมื่อมีผู้แชทใหม่หรือกดจำลองการทำงาน)
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setSettings(prev => ({ ...prev, hideWhenIdle: !prev.hideWhenIdle }))}
+                      className={`w-10 h-5.5 rounded-none flex items-center p-1 cursor-pointer transition-colors ${
+                        settings.hideWhenIdle ? 'bg-pink-500 justify-end' : 'bg-zinc-800 justify-start'
+                      }`}
+                    >
+                      <span className="w-3.5 h-3.5 bg-white" />
+                    </button>
+                  </div>
+
+                  {settings.hideWhenIdle && (
+                    <div className="border-t border-zinc-850 pt-3 space-y-2">
+                      <div className="flex justify-between items-center text-xs font-mono font-bold">
+                        <span className="text-zinc-400 uppercase text-[10px] flex items-center gap-1.5">
+                          ตั้งเวลาซ่อนเมื่อไม่มีการใช้งาน (Idle Timeout)
+                        </span>
+                        <span className="text-pink-400 font-extrabold text-[12px] bg-pink-500/10 px-2 py-0.5 rounded border border-pink-500/20">
+                          {settings.idleTimeout ?? 60} วินาที ({( ((settings.idleTimeout ?? 60) / 60).toFixed(1) )} นาที)
+                        </span>
+                      </div>
+
+                      <input 
+                        type="range"
+                        min="10" 
+                        max="300" 
+                        step="10"
+                        value={settings.idleTimeout ?? 60}
+                        onChange={e => setSettings(prev => ({ ...prev, idleTimeout: parseInt(e.target.value) }))}
+                        className="w-full accent-pink-500 h-1.5 bg-zinc-850 appearance-none cursor-pointer rounded-none"
+                      />
+
+                      <div className="flex justify-between text-[9px] text-zinc-500 font-mono">
+                        <span>⏱️ ทดสอบไว (10 วิ)</span>
+                        <span>⏱️ พักผ่อนสายกลาง (1 นาที)</span>
+                        <span>⏱️ ยืนคุยยาวนาน (5 นาที)</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Auto-Hide when no viewers settings option */}
