@@ -1316,16 +1316,22 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     try {
       const isThai = /[\u0E00-\u0E7F]/.test(text);
       const voices = window.speechSynthesis.getVoices();
-      const hasThaiVoice = voices.some(v => v.lang.startsWith('th') || v.lang.includes('th-'));
+      const hasThaiVoice = voices.some(v => v.lang.toLowerCase().startsWith('th') || v.lang.toLowerCase().includes('th-'));
 
-      // Dual system: Use Google Translate TTS if explicitly chosen or if we need Thai voice but have none in the browser
-      const useGoogle = settings.ttsEngine === 'google' || (isThai && !hasThaiVoice);
+      // Dual system: Force Google Translate TTS for Thai texts since browser Thai voices are often broken, robotic or non-existent in OBS/PCs
+      const useGoogle = settings.ttsEngine === 'google' || isThai || !hasThaiVoice;
 
       if (useGoogle) {
         const langCode = isThai ? 'th' : 'en';
-        // 1. Direct google translate client URL (Extremely reliable from residential/local streamer IPs, bypasses Cloud Run datacentre block)
-        const clientSideUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
-        const audio = new Audio(clientSideUrl);
+        // Optimize for Thai speakers by using google.co.th, otherwise google.com
+        const domain = isThai ? 'translate.google.co.th' : 'translate.google.com';
+        const clientSideUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
+        
+        // Dynamically create audio element and set referrerpolicy="no-referrer" to strip the Referer header
+        // This makes Google see it as a direct client request and bypasses the 403 Forbidden/CORS blocks
+        const audio = document.createElement('audio');
+        audio.setAttribute('referrerpolicy', 'no-referrer');
+        audio.src = clientSideUrl;
         audio.playbackRate = settings.ttsVoiceRate || 1.0;
         
         audio.play()
@@ -1336,7 +1342,9 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
             console.warn('Client-side Google TTS failed (possibly blocked/autoplay-limit), falling back to Server TTS proxy:', err);
             // 2. Fallback to Server Proxy
             const serverSideUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}`;
-            const fallbackAudio = new Audio(serverSideUrl);
+            const fallbackAudio = document.createElement('audio');
+            fallbackAudio.setAttribute('referrerpolicy', 'no-referrer');
+            fallbackAudio.src = serverSideUrl;
             fallbackAudio.playbackRate = settings.ttsVoiceRate || 1.0;
             fallbackAudio.play()
               .then(() => {
@@ -1370,10 +1378,13 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
           selectedVoice = voices.find(v => v.name === settings.ttsVoiceName);
         }
         if (!selectedVoice) {
-          selectedVoice = voices.find(v => isThai ? v.lang.startsWith('th') : v.lang.startsWith('en'));
+          selectedVoice = voices.find(v => {
+            const langLower = v.lang.toLowerCase();
+            return isThai ? (langLower.startsWith('th') || langLower.includes('th-')) : (langLower.startsWith('en') || langLower.includes('en-'));
+          });
         }
         if (!selectedVoice) {
-          selectedVoice = voices.find(v => v.lang.startsWith('id')) || voices[0];
+          selectedVoice = voices.find(v => v.lang.toLowerCase().startsWith('id')) || voices[0];
         }
         if (selectedVoice) {
           utterance.voice = selectedVoice;
@@ -2324,15 +2335,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         </div>
       )}
 
-      {/* Tap/Click anywhere on the stream page to unlock Audio autoplay policies */}
-      {audioLocked && settings.textToSpeech && !window.location.search.includes('overlay=true') && (
-        <button 
-          onClick={unlockAudio}
-          className="fixed top-4 right-4 z-[99999] bg-indigo-600 hover:bg-indigo-500 font-mono text-[11px] font-bold text-white px-3 py-1.5 shadow-[0_4px_12px_rgba(0,0,0,0.5)] flex items-center gap-1.5 select-none pointer-events-auto cursor-pointer animate-pulse border border-indigo-400"
-        >
-          <span>🔊 คลิกด่วนเพื่อเปิดเสียง (Click to Enable Audio/TTS)</span>
-        </button>
-      )}
+
 
       {/* Absolute canvas for the particle burst system */}
       <canvas 
