@@ -93,41 +93,98 @@ async function startServer() {
   // API Route: Server-Side TTS Proxy to bypass CORS & Referer blocks
   app.get("/api/tts", async (req, res) => {
     try {
-      const text = req.query.text as string;
+      let rawText = req.query.text as string;
       const lang = (req.query.lang as string) || "th";
 
-      if (!text) {
+      if (!rawText) {
         res.status(400).json({ error: "Text parameter is required" });
         return;
       }
 
-      // Google Translate TTS URL
-      // Use clean client=tw-ob on translate.google.com to bypass token validation
-      const domain = "translate.google.com";
-      const ttsUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
+      // Truncate text to 150 characters (ideal TTS length limit for Google Translate & prevents 403 UI Blocks/414 URI errors)
+      const text = rawText.substring(0, 150).trim();
 
-      let response = await fetch(ttsUrl, {
+      // Attempt 1: Official Translate API endpoint (domain: translate.googleapis.com)
+      // Highly stable, handles automated query loads better without token/captcha blocks
+      const apiDomain = "translate.googleapis.com";
+      const apiTtsUrl = `https://${apiDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=gtx&q=${encodeURIComponent(text)}`;
+
+      console.log(`TTS Request: "${text}" [lang=${lang}]. Attempting translate.googleapis.com API...`);
+      let response = await fetch(apiTtsUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Referer": `https://${domain}/`
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
       });
 
-      // Secondary fallback to client=gtx if client=tw-ob is blocked or rate-limited
+      // Attempt 2: Standard Google Translate client=tw-ob fallback
       if (!response.ok) {
-        console.warn(`TTS proxy fallback: client=tw-ob returned status ${response.status}. Attempting client=gtx fallback...`);
-        const fallbackUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${lang}&client=gtx&q=${encodeURIComponent(text)}`;
-        response = await fetch(fallbackUrl, {
+        console.warn(`TTS translate.googleapis.com failed (status ${response.status}). Trying translate.google.com with client=tw-ob...`);
+        const googleDomain = "translate.google.com";
+        const googleTtsUrl = `https://${googleDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
+        response = await fetch(googleTtsUrl, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": `https://${domain}/`
+            "Referer": `https://${googleDomain}/`
           }
         });
       }
 
+      // Attempt 3: Bulletproof SoundOfText API Proxy fallback
+      // Since SoundOfText is hosted externally, it is highly immune to local Cloud Run IP bans or Google captchas.
       if (!response.ok) {
-        console.error("Google TTS response not OK in both attempts:", response.status, response.statusText);
-        res.status(response.status).json({ error: "Failed to fetch TTS from Google" });
+        console.warn(`TTS translate.google.com failed (status ${response.status}). Launching SoundOfText API Relay...`);
+        try {
+          const soundOfTextVoice = lang === "th" ? "th-TH" : "en-US";
+          const sotRegisterRes = await fetch("https://api.soundoftext.com/sounds", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            },
+            body: JSON.stringify({
+              engine: "gtts",
+              data: {
+                text: text,
+                voice: soundOfTextVoice
+              }
+            })
+          });
+
+          if (sotRegisterRes.ok) {
+            const sotData = await sotRegisterRes.json();
+            if (sotData.success && sotData.id) {
+              const soundId = sotData.id;
+              console.log(`SoundOfText Sound registered successfully: ${soundId}. Waiting for completion...`);
+
+              // Poll or fetch SoundOfText link (usually completed nearly instantly)
+              let downloadUrl = "";
+              for (let i = 0; i < 5; i++) {
+                const sotStatusRes = await fetch(`https://api.soundoftext.com/sounds/${soundId}`);
+                if (sotStatusRes.ok) {
+                  const statusData = await sotStatusRes.json();
+                  if (statusData.status === "done" && statusData.location) {
+                    downloadUrl = statusData.location;
+                    break;
+                  }
+                }
+                // Sleep 150ms before polling
+                await new Promise((resolve) => setTimeout(resolve, 150));
+              }
+
+              if (downloadUrl) {
+                console.log(`Streaming SoundOfText MP3: ${downloadUrl}`);
+                response = await fetch(downloadUrl);
+              }
+            }
+          }
+        } catch (sotErr) {
+          console.error("SoundOfText fallback execution encountered a crash:", sotErr);
+        }
+      }
+
+      if (!response.ok) {
+        console.error("Google TTS and SoundOfText failed completely:", response.status, response.statusText);
+        res.status(response.status || 500).json({ error: "Failed to generate TTS audio stream across all 3 providers." });
         return;
       }
 

@@ -1316,21 +1316,18 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     // 1. Clean main content (e.g., chat message or gift name) from emojis & non-pronounceable symbols
     // It is important to leave letters, numbers, spaces, and basic punctuation but strip visual emoji slop
     let cleanComment = mainContent
-      .replace(/[\u1F600-\u1F64F\u1F300-\u1F5FF\u1F680-\u1F6FF\u1F1E0-\u1F1FF\u2600-\u27BF\uE000-\uF8FF\u200B-\u200D\uFE0F]/g, '') // Emojis and zero-width spaces
+      .replace(/[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u200B-\u200D\uFE0F]|[\u2600-\u27BF]|[\uE000-\uF8FF]/g, '') // Safe surrogate-pairs and emoji/symbol stripping
       .replace(/[~`@#$%^&*()_\-+={[}\]|\\:;"'<,>?\/]/g, ' ') // Replace punctuation causing synthesizer audio glitch with space
       .trim();
 
-    // 2. Identify if it contains Thai characters to select voice localized domain later
-    const isThai = /[\u0E00-\u0E7F]/.test(cleanComment || nickname);
-
-    // 3. Process nickname
+    // 2. Process nickname
     let cleanNickname = nickname.trim();
     if (settings.ttsSkipNickname) {
       cleanNickname = '';
     } else {
       // Clean nickname from emojis/symbols too
       cleanNickname = cleanNickname
-        .replace(/[\u1F600-\u1F64F\u1F300-\u1F5FF\u1F680-\u1F6FF\u2600-\u27BF]/g, '')
+        .replace(/[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u200B-\u200D\uFE0F]|[\u2600-\u27BF]|[\uE000-\uF8FF]/g, '')
         .trim();
 
       const hasThaiName = /[\u0E00-\u0E7F]/.test(cleanNickname);
@@ -1342,10 +1339,10 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       }
     }
 
-    // 4. Construct final spoken text based on event type
+    // 3. Construct final spoken text based on event type
     let finalSpokenText = '';
     if (type === 'chat') {
-      if (!cleanComment) return { text: '', isThai };
+      if (!cleanComment) return { text: '', isThai: true };
       finalSpokenText = cleanNickname ? `${cleanNickname}กล่าวว่า ${cleanComment}` : cleanComment;
     } else if (type === 'gift') {
       finalSpokenText = cleanNickname ? `${cleanNickname} ส่งของขวัญ ${cleanComment}!` : `ส่งของขวัญ ${cleanComment}!`;
@@ -1354,6 +1351,10 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     } else if (type === 'share_image') {
       finalSpokenText = cleanNickname ? `${cleanNickname} ได้ส่งรูปภาพ และบอกว่า ${cleanComment}` : `ส่งรูปภาพ ${cleanComment}`;
     }
+
+    // 4. Identify if it contains Thai characters to select voice localized domain later
+    // Test the final constructed spoken text so that preambles like 'คุณกล่าวว่า' or the Thai texts are correctly identified.
+    const isThai = /[\u0E00-\u0E7F]/.test(finalSpokenText || cleanComment || nickname);
 
     return { text: finalSpokenText.trim(), isThai };
   };
@@ -1370,8 +1371,8 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
       if (useGoogle) {
         const langCode = isThai ? 'th' : 'en';
-        const domain = 'translate.google.com';
-        const clientSideUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
+        // Try stable googleapis API endpoint first client-side
+        const clientSideUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=${langCode}&client=gtx&q=${encodeURIComponent(text)}`;
         
         // Dynamically create audio element and set referrerpolicy="no-referrer" to strip the Referer header
         // This makes Google see it as a direct client request and bypasses the 403 Forbidden/CORS blocks
