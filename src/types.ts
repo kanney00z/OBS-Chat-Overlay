@@ -20,7 +20,8 @@ export interface OverlaySettings {
   ttsVoiceRate: number;
   ttsVoicePitch: number;
   ttsVoiceName?: string;
-  ttsEngine?: 'browser' | 'google';
+  ttsEngine?: 'browser' | 'google' | 'google_cloud_premium';
+  ttsApiKey?: string;
   ttsReadChat?: boolean;
   ttsReadGift?: boolean;
   ttsReadFollow?: boolean;

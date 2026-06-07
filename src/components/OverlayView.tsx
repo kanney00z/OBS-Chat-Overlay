@@ -1371,19 +1371,33 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       const isThai = isThaiOverride !== undefined ? isThaiOverride : /[\u0E00-\u0E7F]/.test(text);
       const voices = window.speechSynthesis.getVoices();
       const hasThaiVoice = voices.some(v => v.lang.toLowerCase().startsWith('th') || v.lang.toLowerCase().includes('th-'));
+      const langCode = isThai ? 'th' : 'en';
 
       console.log('TTS Request to perform voice speech:', { text, isThai, engine: settings.ttsEngine, hasThaiVoice });
 
-      // Dual system: Force Google Translate TTS for Thai texts since browser Thai voices are often broken, robotic or non-existent in OBS/PCs
-      const useGoogle = settings.ttsEngine === 'google' || isThai || !hasThaiVoice;
-
-      if (useGoogle) {
-        const langCode = isThai ? 'th' : 'en';
-        // Try stable Google Translate endpoint first client-side (client=tw-ob is the most permissive & bypassed)
+      if (settings.ttsEngine === 'google_cloud_premium') {
+        const apiKeyParam = settings.ttsApiKey ? `&apiKey=${encodeURIComponent(settings.ttsApiKey)}` : '';
+        const serverUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}&engine=google_cloud_premium${apiKeyParam}`;
+        
+        const audio = document.createElement('audio');
+        audio.setAttribute('referrerpolicy', 'no-referrer');
+        audio.src = serverUrl;
+        audio.playbackRate = settings.ttsVoiceRate || 1.0;
+        
+        audio.play()
+          .then(() => {
+            console.log('Successfully played Premium Google Cloud Neural2 TTS stream');
+          })
+          .catch(err => {
+            console.warn('Premium Google Cloud TTS play failed (possibly autoplay blocked), falling back to browser synthesis:', err);
+            speakBrowserTTS(text, isThai, voices);
+          });
+      } else if (settings.ttsEngine === 'browser') {
+        speakBrowserTTS(text, isThai, voices);
+      } else {
+        // Try stable Google Translate endpoint first client-side (client=tw-ob)
         const clientSideUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
         
-        // Dynamically create audio element and set referrerpolicy="no-referrer" to strip the Referer header
-        // This makes Google see it as a direct client request and bypasses the 403 Forbidden/CORS blocks
         const audio = document.createElement('audio');
         audio.setAttribute('referrerpolicy', 'no-referrer');
         audio.src = clientSideUrl;
@@ -1396,7 +1410,9 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
           .catch(err => {
             console.warn('Client-side Google TTS failed (possibly blocked/autoplay-limit), falling back to Server TTS proxy:', err);
             // 2. Fallback to Server Proxy
-            const serverSideUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}`;
+            const apiKeyParam = settings.ttsApiKey ? `&apiKey=${encodeURIComponent(settings.ttsApiKey)}` : '';
+            const serverSideUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}${apiKeyParam}`;
+            
             const fallbackAudio = document.createElement('audio');
             fallbackAudio.setAttribute('referrerpolicy', 'no-referrer');
             fallbackAudio.src = serverSideUrl;
@@ -1407,12 +1423,9 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
               })
               .catch(proxyErr => {
                 console.warn('Server-side Google TTS proxy also failed, falling back to Browser Web Speech synthesis:', proxyErr);
-                // 3. Fallback to Native Speech Synthesis
                 speakBrowserTTS(text, isThai, voices);
               });
           });
-      } else {
-        speakBrowserTTS(text, isThai, voices);
       }
     } catch (e) {
       console.warn('TTS vocalisation failed:', e);

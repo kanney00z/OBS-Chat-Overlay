@@ -95,6 +95,8 @@ async function startServer() {
     try {
       let rawText = req.query.text as string;
       const lang = (req.query.lang as string) || "th";
+      const clientApiKey = req.query.apiKey as string;
+      const clientEngine = req.query.engine as string;
 
       if (!rawText) {
         res.status(400).json({ error: "Text parameter is required" });
@@ -104,13 +106,66 @@ async function startServer() {
       // Truncate text to 150 characters (ideal TTS length limit for Google Translate & prevents 403 UI Blocks/414 URI errors)
       const text = rawText.substring(0, 150).trim();
 
+      // Check if we should attempt premium Google Cloud TTS
+      const apiKey = clientApiKey || process.env.GEMINI_API_KEY || "";
+      let response: Response | null = null;
+
+      if ((clientEngine === "google_cloud_premium" || clientApiKey) && apiKey) {
+        console.log(`TTS: Attempting Premium Google Cloud Text-to-Speech API. Key length: ${apiKey.length}`);
+        try {
+          const cloudTtsUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+          
+          // Neural2 yields human-grade, state-of-the-art synthetic speech
+          // Wavenet is also excellent, and standard is the cost-efficient one.
+          // Let's use neural2 as standard tier, falling back to Wavenet / Standard if Neural2 throws quota errors.
+          const cloudTtsBody = {
+            input: { text: text },
+            voice: {
+              languageCode: lang === "th" ? "th-TH" : "en-US",
+              name: lang === "th" ? "th-TH-Neural2-F" : "en-US-Neural2-F",
+              ssmlGender: "FEMALE"
+            },
+            audioConfig: {
+              audioEncoding: "MP3"
+            }
+          };
+
+          const cloudRes = await fetch(cloudTtsUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(cloudTtsBody)
+          });
+
+          if (cloudRes.ok) {
+            const data: any = await cloudRes.json();
+            if (data.audioContent) {
+              console.log(`TTS Premium success: Produced high-quality bytes for text: "${text.substring(0, 20)}..."`);
+              const buffer = Buffer.from(data.audioContent, "base64");
+              res.setHeader("Content-Type", "audio/mpeg");
+              res.setHeader("Content-Length", buffer.length);
+              res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 24 hours
+              res.send(buffer);
+              return;
+            }
+          } else {
+            const errorText = await cloudRes.text();
+            console.warn(`Premium Google Cloud TTS returned non-OK status (${cloudRes.status}):`, errorText);
+            // Don't crash, let it cascade down to free scrapers so the user's overlay remains operational!
+          }
+        } catch (cloudErr) {
+          console.error("Failed to fetch from premium Google Cloud Text-to-Speech API:", cloudErr);
+        }
+      }
+
       // Attempt 1: Standard stable Google Translate client=tw-ob endpoint (domain: translate.google.com)
       // Highly stable, handles automated query loads better without token/captcha blocks
       const googleDomain = "translate.google.com";
       const apiTtsUrl = `https://${googleDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
 
       console.log(`TTS Request: "${text}" [lang=${lang}]. Attempting translate.google.com API...`);
-      let response = await fetch(apiTtsUrl, {
+      response = await fetch(apiTtsUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Referer": `https://${googleDomain}/`
@@ -182,9 +237,9 @@ async function startServer() {
         }
       }
 
-      if (!response.ok) {
-        console.error("Google TTS and SoundOfText failed completely:", response.status, response.statusText);
-        res.status(response.status || 500).json({ error: "Failed to generate TTS audio stream across all 3 providers." });
+      if (!response || !response.ok) {
+        console.error("Google TTS and SoundOfText failed completely:", response ? response.status : "No response", response ? response.statusText : "");
+        res.status(response ? response.status : 500).json({ error: "Failed to generate TTS audio stream across all 3 providers." });
         return;
       }
 

@@ -2051,33 +2051,64 @@ export default function DashboardView() {
                         <div className="flex justify-between items-center text-[10.5px] font-mono text-zinc-400 leading-none">
                           <span>ระบุระบบประมวลผลเสียง (Speech Engine / Voice Server)</span>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                           <button
                             type="button"
                             onClick={() => setSettings(prev => ({ ...prev, ttsEngine: 'google' }))}
-                            className={`px-3 py-2 text-xs font-mono border flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
+                            className={`px-2 py-2.5 text-xs font-mono border flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
                               settings.ttsEngine === 'google' || !settings.ttsEngine
                                 ? 'bg-indigo-950/40 border-indigo-500 text-indigo-300 ring-1 ring-indigo-500'
                                 : 'bg-[#18181b] border-zinc-800 text-zinc-400 hover:border-zinc-700'
                             }`}
                           >
-                            <span className="font-bold flex items-center gap-1 text-[11px]">☁️ Google Cloud (เสียงไทยแท้)</span>
-                            <span className="text-[9px] text-zinc-500 mt-0.5 leading-tight">แม่นยำ 100% เล่นได้ทุกเครื่องโดยไม่ต้องติดตั้งเพิ่ม</span>
+                            <span className="font-bold flex items-center gap-1 text-[11px]">☁️ Google Free</span>
+                            <span className="text-[9px] text-zinc-500 mt-1 leading-tight">เสียงไทยแท้ทั่วไป ไม่ต้องระบุคีย์</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSettings(prev => ({ ...prev, ttsEngine: 'google_cloud_premium' }))}
+                            className={`px-2 py-2.5 text-xs font-mono border flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
+                              settings.ttsEngine === 'google_cloud_premium'
+                                ? 'bg-indigo-950/40 border-indigo-500 text-indigo-300 ring-1 ring-indigo-500'
+                                : 'bg-[#18181b] border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                            }`}
+                          >
+                            <span className="font-bold flex items-center gap-1 text-[11px]">🔥 Cloud Premium</span>
+                            <span className="text-[9px] text-zinc-500 mt-1 leading-tight">เสียง Neural2 คมชัดระดับมนุษย์ (มีเสถียรภาพสูงสุด)</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setSettings(prev => ({ ...prev, ttsEngine: 'browser' }))}
-                            className={`px-3 py-2 text-xs font-mono border flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
+                            className={`px-2 py-2.5 text-xs font-mono border flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
                               settings.ttsEngine === 'browser'
                                 ? 'bg-indigo-950/40 border-indigo-500 text-indigo-300 ring-1 ring-indigo-500'
                                 : 'bg-[#18181b] border-zinc-800 text-zinc-400 hover:border-zinc-700'
                             }`}
                           >
-                            <span className="font-bold flex items-center gap-1 text-[11px]">🖥️ Browser Web Synthesis</span>
-                            <span className="text-[9px] text-zinc-500 mt-0.5 leading-tight">สังเคราะห์ด้วยกำลังเครื่อง และเสียงที่มีในเครื่อง</span>
+                            <span className="font-bold flex items-center gap-1 text-[11px]">🖥️ Browser Synthesizer</span>
+                            <span className="text-[9px] text-zinc-500 mt-1 leading-tight">สังเคราะห์ด้วยเสียงที่มีในระบบเบราว์เซอร์คุณ</span>
                           </button>
                         </div>
                       </div>
+
+                      {/* Select Voice selector (only visible/relevant if Web TTS is selected) */}
+                      {settings.ttsEngine === 'google_cloud_premium' && (
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex justify-between items-center text-[10.5px] font-mono text-zinc-400 leading-none">
+                            <span>Google Cloud API Key (ใช้คีย์สำหรับ TTS เสถียรและชัดขึ้น)</span>
+                          </div>
+                          <input
+                            type="password"
+                            placeholder="ป้อน Google Cloud API Key (เช่น AIzaSy...)"
+                            value={settings.ttsApiKey || ''}
+                            onChange={e => setSettings(prev => ({ ...prev, ttsApiKey: e.target.value }))}
+                            className="w-full bg-[#18181b] border border-zinc-800 rounded-none px-2 py-1.5 text-xs text-white font-mono leading-tight focus:outline-none focus:border-indigo-500"
+                          />
+                          <p className="text-[10px] text-zinc-500 leading-normal">
+                            * แนะนำ: คีย์ Google Cloud ช่วยตัดปัญหา IP โดนบล็อกได้ 100% และให้เสียงระดับ Neural2 สมจริงสุดๆ (ฟรีโควต้าสังเคราะห์ของ Google ตลอดชื่อบัญชี)
+                          </p>
+                        </div>
+                      )}
 
                       {/* Select Voice selector (only visible/relevant if Web TTS is selected) */}
                       {settings.ttsEngine === 'browser' ? (
