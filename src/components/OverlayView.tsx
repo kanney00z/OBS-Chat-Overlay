@@ -1311,10 +1311,57 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
   };
 
   // Text to speech engine
-  const triggerTTS = (text: string) => {
-    if (!settings.textToSpeech) return;
+  // Pre-process and sanitize text for perfect Thai pronunciation & bypass robotic spelling of usernames
+  const prepareTTSMsg = (type: 'chat' | 'gift' | 'follow' | 'share_image', nickname: string, mainContent: string) => {
+    // 1. Clean main content (e.g., chat message or gift name) from emojis & non-pronounceable symbols
+    // It is important to leave letters, numbers, spaces, and basic punctuation but strip visual emoji slop
+    let cleanComment = mainContent
+      .replace(/[\u1F600-\u1F64F\u1F300-\u1F5FF\u1F680-\u1F6FF\u1F1E0-\u1F1FF\u2600-\u27BF\uE000-\uF8FF\u200B-\u200D\uFE0F]/g, '') // Emojis and zero-width spaces
+      .replace(/[~`@#$%^&*()_\-+={[}\]|\\:;"'<,>?\/]/g, ' ') // Replace punctuation causing synthesizer audio glitch with space
+      .trim();
+
+    // 2. Identify if it contains Thai characters to select voice localized domain later
+    const isThai = /[\u0E00-\u0E7F]/.test(cleanComment || nickname);
+
+    // 3. Process nickname
+    let cleanNickname = nickname.trim();
+    if (settings.ttsSkipNickname) {
+      cleanNickname = '';
+    } else {
+      // Clean nickname from emojis/symbols too
+      cleanNickname = cleanNickname
+        .replace(/[\u1F600-\u1F64F\u1F300-\u1F5FF\u1F680-\u1F6FF\u2600-\u27BF]/g, '')
+        .trim();
+
+      const hasThaiName = /[\u0E00-\u0E7F]/.test(cleanNickname);
+      if (!hasThaiName) {
+        // Pure English (or English+数字) nicknames like "Somsak123", "User_999" are extremely
+        // annoying to read character by character in Thai. Translating them to friendly "คุณ" (Khun/You)
+        // makes the streams extremely natural, clean, and fluid!
+        cleanNickname = "คุณ";
+      }
+    }
+
+    // 4. Construct final spoken text based on event type
+    let finalSpokenText = '';
+    if (type === 'chat') {
+      if (!cleanComment) return { text: '', isThai };
+      finalSpokenText = cleanNickname ? `${cleanNickname}กล่าวว่า ${cleanComment}` : cleanComment;
+    } else if (type === 'gift') {
+      finalSpokenText = cleanNickname ? `${cleanNickname} ส่งของขวัญ ${cleanComment}!` : `ส่งของขวัญ ${cleanComment}!`;
+    } else if (type === 'follow') {
+      finalSpokenText = cleanNickname ? `${cleanNickname} ได้กดติดตามช่องแล้ว!` : `มีผู้ติดตามคนใหม่แล้ว!`;
+    } else if (type === 'share_image') {
+      finalSpokenText = cleanNickname ? `${cleanNickname} ได้ส่งรูปภาพ และบอกว่า ${cleanComment}` : `ส่งรูปภาพ ${cleanComment}`;
+    }
+
+    return { text: finalSpokenText.trim(), isThai };
+  };
+
+  const triggerTTS = (text: string, isThaiOverride?: boolean) => {
+    if (!settings.textToSpeech || !text) return;
     try {
-      const isThai = /[\u0E00-\u0E7F]/.test(text);
+      const isThai = isThaiOverride !== undefined ? isThaiOverride : /[\u0E00-\u0E7F]/.test(text);
       const voices = window.speechSynthesis.getVoices();
       const hasThaiVoice = voices.some(v => v.lang.toLowerCase().startsWith('th') || v.lang.toLowerCase().includes('th-'));
 
@@ -1325,7 +1372,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         const langCode = isThai ? 'th' : 'en';
         // Optimize for Thai speakers by using google.co.th, otherwise google.com
         const domain = isThai ? 'translate.google.co.th' : 'translate.google.com';
-        const clientSideUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
+        const clientSideUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}&total=1&idx=0&textlen=${text.length}&prev=input`;
         
         // Dynamically create audio element and set referrerpolicy="no-referrer" to strip the Referer header
         // This makes Google see it as a direct client request and bypasses the 403 Forbidden/CORS blocks
@@ -1368,8 +1415,8 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     try {
       window.speechSynthesis.cancel(); // Cancel active speech
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = settings.ttsVoiceRate;
-      utterance.pitch = settings.ttsVoicePitch;
+      utterance.rate = settings.ttsVoiceRate || 1.0;
+      utterance.pitch = settings.ttsVoicePitch || 1.0;
       utterance.lang = isThai ? 'th-TH' : 'en-US';
 
       if (voices.length > 0) {
@@ -1383,12 +1430,14 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
             return isThai ? (langLower.startsWith('th') || langLower.includes('th-')) : (langLower.startsWith('en') || langLower.includes('en-'));
           });
         }
-        if (!selectedVoice) {
-          selectedVoice = voices.find(v => v.lang.toLowerCase().startsWith('id')) || voices[0];
-        }
+        
         if (selectedVoice) {
           utterance.voice = selectedVoice;
           utterance.lang = selectedVoice.lang;
+        } else {
+          // If no matching voice is found, we keep utterance.lang as 'th-TH' so the host system can try to load its default Thai package.
+          // NEVER fallback to English/indonesian voice for Thai text.
+          utterance.lang = isThai ? 'th-TH' : 'en-US';
         }
       }
       window.speechSynthesis.speak(utterance);
@@ -1519,17 +1568,17 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     // 3. Trigger TTS if applicable
     if (settings.textToSpeech) {
       if (messageObj.type === 'chat' && (settings.ttsReadChat !== false) && messageObj.comment) {
-        const text = settings.ttsSkipNickname ? `${messageObj.comment}` : `${messageObj.nickname} กล่าวว่า ${messageObj.comment}`;
-        triggerTTS(text);
+        const { text, isThai } = prepareTTSMsg('chat', messageObj.nickname, messageObj.comment);
+        if (text) triggerTTS(text, isThai);
       } else if (messageObj.type === 'gift' && (settings.ttsReadGift !== false)) {
-        const text = settings.ttsSkipNickname ? `ส่งของขวัญ ${messageObj.giftName || ''}` : `${messageObj.nickname} ส่งของขวัญ ${messageObj.giftName || ''}!`;
-        triggerTTS(text);
+        const { text, isThai } = prepareTTSMsg('gift', messageObj.nickname, messageObj.giftName || '');
+        if (text) triggerTTS(text, isThai);
       } else if (messageObj.type === 'follow' && (settings.ttsReadFollow !== false)) {
-        const text = settings.ttsSkipNickname ? `กดติดตามสตรีมแล้ว` : `${messageObj.nickname} กดติดตามสตรีมของคุณแล้ว!`;
-        triggerTTS(text);
+        const { text, isThai } = prepareTTSMsg('follow', messageObj.nickname, '');
+        if (text) triggerTTS(text, isThai);
       } else if (messageObj.type === 'share_image' && (settings.ttsReadShareImage !== false)) {
-        const text = settings.ttsSkipNickname ? `ส่งรูปภาพ ${messageObj.comment || ''}` : `${messageObj.nickname} ส่งรูปภาพและบอกว่า ${messageObj.comment || ''}`;
-        triggerTTS(text);
+        const { text, isThai } = prepareTTSMsg('share_image', messageObj.nickname, messageObj.comment || '');
+        if (text) triggerTTS(text, isThai);
       }
     }
 

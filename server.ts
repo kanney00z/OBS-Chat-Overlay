@@ -102,13 +102,14 @@ async function startServer() {
       }
 
       // Google Translate TTS URL
-      // client=tw-ob or client=gtx works for public stream
-      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=gtx`;
+      // Use client=tw-ob which is highly permissive on server side, localized translate.google.co.th for Thai
+      const domain = lang === 'th' ? 'translate.google.co.th' : 'translate.google.com';
+      const ttsUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}&total=1&idx=0&textlen=${text.length}&prev=input`;
 
       const response = await fetch(ttsUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Referer": "https://translate.google.com/"
+          "Referer": `https://${domain}/`
         }
       });
 
