@@ -1365,6 +1365,40 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     return { text: finalSpokenText.trim(), isThai };
   };
 
+  const playGoogleTTS = (text: string, langCode: string, voices: SpeechSynthesisVoice[], isThai: boolean) => {
+    // Try stable Google Translate endpoint first client-side (client=tw-ob)
+    const clientSideUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
+    
+    const audio = document.createElement('audio');
+    audio.setAttribute('referrerpolicy', 'no-referrer');
+    audio.src = clientSideUrl;
+    audio.playbackRate = settings.ttsVoiceRate || 1.0;
+    
+    audio.play()
+      .then(() => {
+        console.log('Successfully played client-side Google Translation TTS stream');
+      })
+      .catch(err => {
+        console.warn('Client-side Google TTS failed (possibly blocked/autoplay-limit), falling back to Server TTS proxy:', err);
+        // 2. Fallback to Server Proxy
+        const apiKeyParam = settings.ttsApiKey ? `&apiKey=${encodeURIComponent(settings.ttsApiKey)}` : '';
+        const serverSideUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}${apiKeyParam}`;
+        
+        const fallbackAudio = document.createElement('audio');
+        fallbackAudio.setAttribute('referrerpolicy', 'no-referrer');
+        fallbackAudio.src = serverSideUrl;
+        fallbackAudio.playbackRate = settings.ttsVoiceRate || 1.0;
+        fallbackAudio.play()
+          .then(() => {
+            console.log('Successfully played server-side Google TTS proxy');
+          })
+          .catch(proxyErr => {
+            console.warn('Server-side Google TTS proxy also failed, falling back to Browser Web Speech synthesis:', proxyErr);
+            speakBrowserTTS(text, isThai, voices);
+          });
+      });
+  };
+
   const triggerTTS = (text: string, isThaiOverride?: boolean) => {
     if (!settings.textToSpeech || !text) return;
     try {
@@ -1393,39 +1427,18 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
             speakBrowserTTS(text, isThai, voices);
           });
       } else if (settings.ttsEngine === 'browser') {
-        speakBrowserTTS(text, isThai, voices);
+        // AUTOMATIC INTER-MACHINE ROAMING REPAIR:
+        // If this machine has NO Thai voice package installed in browser/OS,
+        // voice synthesis will result in Thai words read in an English/foreign accent (sounding like "ภาษาอื่น").
+        // Therefore, we automatically redirect Thai requests to Google Translate/Cloud TTS.
+        if (isThai && voices.length > 0 && !hasThaiVoice) {
+          console.warn('No native Thai voice found on this system. Automatically falling back to Google Cloud/Translate TTS to prevent "ภาษาอื่น" (foreign speech accent).');
+          playGoogleTTS(text, langCode, voices, isThai);
+        } else {
+          speakBrowserTTS(text, isThai, voices);
+        }
       } else {
-        // Try stable Google Translate endpoint first client-side (client=tw-ob)
-        const clientSideUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
-        
-        const audio = document.createElement('audio');
-        audio.setAttribute('referrerpolicy', 'no-referrer');
-        audio.src = clientSideUrl;
-        audio.playbackRate = settings.ttsVoiceRate || 1.0;
-        
-        audio.play()
-          .then(() => {
-            console.log('Successfully played client-side Google Translation TTS stream');
-          })
-          .catch(err => {
-            console.warn('Client-side Google TTS failed (possibly blocked/autoplay-limit), falling back to Server TTS proxy:', err);
-            // 2. Fallback to Server Proxy
-            const apiKeyParam = settings.ttsApiKey ? `&apiKey=${encodeURIComponent(settings.ttsApiKey)}` : '';
-            const serverSideUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}${apiKeyParam}`;
-            
-            const fallbackAudio = document.createElement('audio');
-            fallbackAudio.setAttribute('referrerpolicy', 'no-referrer');
-            fallbackAudio.src = serverSideUrl;
-            fallbackAudio.playbackRate = settings.ttsVoiceRate || 1.0;
-            fallbackAudio.play()
-              .then(() => {
-                console.log('Successfully played server-side Google TTS proxy');
-              })
-              .catch(proxyErr => {
-                console.warn('Server-side Google TTS proxy also failed, falling back to Browser Web Speech synthesis:', proxyErr);
-                speakBrowserTTS(text, isThai, voices);
-              });
-          });
+        playGoogleTTS(text, langCode, voices, isThai);
       }
     } catch (e) {
       console.warn('TTS vocalisation failed:', e);
@@ -1434,6 +1447,13 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
   const speakBrowserTTS = (text: string, isThai: boolean, voices: SpeechSynthesisVoice[]) => {
     try {
+      const hasThaiVoice = voices.some(v => v.lang.toLowerCase().startsWith('th') || v.lang.toLowerCase().includes('th-'));
+      if (isThai && voices.length > 0 && !hasThaiVoice) {
+        console.warn('speakBrowserTTS: No Thai voice found on this system. Falling back on the fly to Google Translate.');
+        playGoogleTTS(text, 'th', voices, isThai);
+        return;
+      }
+
       // 1. Cancel any active speech synthesis
       window.speechSynthesis.cancel();
       
