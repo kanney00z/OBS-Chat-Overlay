@@ -1365,7 +1365,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     return { text: finalSpokenText.trim(), isThai };
   };
 
-  const playGoogleTTS = (text: string, langCode: string, voices: SpeechSynthesisVoice[], isThai: boolean) => {
+  const playGoogleTTS = (text: string, langCode: string, voices: SpeechSynthesisVoice[], isThai: boolean, alreadyAttemptedBrowser = false) => {
     // Try stable Google Translate endpoint first client-side (client=tw-ob)
     const clientSideUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
     
@@ -1393,8 +1393,13 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
             console.log('Successfully played server-side Google TTS proxy');
           })
           .catch(proxyErr => {
-            console.warn('Server-side Google TTS proxy also failed, falling back to Browser Web Speech synthesis:', proxyErr);
-            speakBrowserTTS(text, isThai, voices);
+            console.error('Server-side Google TTS proxy also failed. Autoplay might be blocked by the browser. (Note: Please click once on the OBS overlay screen to activate sound autoplay!)');
+            if (!alreadyAttemptedBrowser) {
+              console.warn('Falling back to Browser Web Speech Synthesis as last resort.');
+              speakBrowserTTS(text, isThai, voices, true);
+            } else {
+              console.error('All TTS fallbacks failed. No further attempts to prevent loops.');
+            }
           });
       });
   };
@@ -1424,7 +1429,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
           })
           .catch(err => {
             console.warn('Premium Google Cloud TTS play failed (possibly autoplay blocked), falling back to browser synthesis:', err);
-            speakBrowserTTS(text, isThai, voices);
+            speakBrowserTTS(text, isThai, voices, false);
           });
       } else if (settings.ttsEngine === 'browser') {
         // AUTOMATIC INTER-MACHINE ROAMING REPAIR:
@@ -1433,25 +1438,29 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         // Therefore, we automatically redirect Thai requests to Google Translate/Cloud TTS.
         if (isThai && voices.length > 0 && !hasThaiVoice) {
           console.warn('No native Thai voice found on this system. Automatically falling back to Google Cloud/Translate TTS to prevent "ภาษาอื่น" (foreign speech accent).');
-          playGoogleTTS(text, langCode, voices, isThai);
+          playGoogleTTS(text, langCode, voices, isThai, false);
         } else {
-          speakBrowserTTS(text, isThai, voices);
+          speakBrowserTTS(text, isThai, voices, false);
         }
       } else {
-        playGoogleTTS(text, langCode, voices, isThai);
+        playGoogleTTS(text, langCode, voices, isThai, false);
       }
     } catch (e) {
       console.warn('TTS vocalisation failed:', e);
     }
   };
 
-  const speakBrowserTTS = (text: string, isThai: boolean, voices: SpeechSynthesisVoice[]) => {
+  const speakBrowserTTS = (text: string, isThai: boolean, voices: SpeechSynthesisVoice[], alreadyAttemptedGoogle = false) => {
     try {
       const hasThaiVoice = voices.some(v => v.lang.toLowerCase().startsWith('th') || v.lang.toLowerCase().includes('th-'));
       if (isThai && voices.length > 0 && !hasThaiVoice) {
-        console.warn('speakBrowserTTS: No Thai voice found on this system. Falling back on the fly to Google Translate.');
-        playGoogleTTS(text, 'th', voices, isThai);
-        return;
+        if (!alreadyAttemptedGoogle) {
+          console.warn('speakBrowserTTS: No Thai voice found on this system. Falling back on the fly to Google Translate.');
+          playGoogleTTS(text, 'th', voices, isThai, true);
+          return;
+        } else {
+          console.warn('speakBrowserTTS: Thai voice not installed on this machine and Google Translate also failed. Synthesizing directly via Web Speech as last resort.');
+        }
       }
 
       // 1. Cancel any active speech synthesis

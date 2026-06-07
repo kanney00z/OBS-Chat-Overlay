@@ -165,29 +165,37 @@ async function startServer() {
       const apiTtsUrl = `https://${googleDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
 
       console.log(`TTS Request: "${text}" [lang=${lang}]. Attempting translate.google.com API...`);
-      response = await fetch(apiTtsUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Referer": `https://${googleDomain}/`
-        }
-      });
-
-      // Attempt 2: Backup translate.googleapis.com with client=gtx fallback
-      if (!response.ok) {
-        console.warn(`TTS translate.google.com failed (status ${response.status}). Trying translate.googleapis.com with client=gtx...`);
-        const apiDomain = "translate.googleapis.com";
-        const apiTtsUrlFallback = `https://${apiDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=gtx&q=${encodeURIComponent(text)}`;
-        response = await fetch(apiTtsUrlFallback, {
+      try {
+        response = await fetch(apiTtsUrl, {
           headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": `https://${googleDomain}/`
           }
         });
+      } catch (err) {
+        console.warn("Failed to fetch translate.google.com due to network error/block:", err);
+      }
+
+      // Attempt 2: Backup translate.googleapis.com with client=gtx fallback
+      if (!response || !response.ok) {
+        console.warn(`TTS translate.google.com failed (status ${response ? response.status : "thrown error"}). Trying translate.googleapis.com with client=gtx...`);
+        const apiDomain = "translate.googleapis.com";
+        const apiTtsUrlFallback = `https://${apiDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=gtx&q=${encodeURIComponent(text)}`;
+        try {
+          response = await fetch(apiTtsUrlFallback, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          });
+        } catch (err) {
+          console.warn("Failed to fetch translate.googleapis.com due to network error/block:", err);
+        }
       }
 
       // Attempt 3: Bulletproof SoundOfText API Proxy fallback
       // Since SoundOfText is hosted externally, it is highly immune to local Cloud Run IP bans or Google captchas.
-      if (!response.ok) {
-        console.warn(`TTS translate.google.com failed (status ${response.status}). Launching SoundOfText API Relay...`);
+      if (!response || !response.ok) {
+        console.warn(`TTS translate.google.com failed (status ${response ? response.status : "thrown error"}). Launching SoundOfText API Relay...`);
         try {
           const soundOfTextVoice = lang === "th" ? "th-TH" : "en-US";
           const sotRegisterRes = await fetch("https://api.soundoftext.com/sounds", {
