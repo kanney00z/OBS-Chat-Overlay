@@ -96,6 +96,21 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
   const particleIdRef = useRef(0);
   const animationFrameRef = useRef<number | null>(null);
 
+  // Global browser click or touch handler to transparently unlock speech/audio policies as a fallback
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      if (audioLocked) {
+        unlockAudio();
+      }
+    };
+    window.addEventListener('click', handleGlobalClick);
+    window.addEventListener('touchstart', handleGlobalClick);
+    return () => {
+      window.removeEventListener('click', handleGlobalClick);
+      window.removeEventListener('touchstart', handleGlobalClick);
+    };
+  }, [audioLocked]);
+
   // Parse settings from URL or override
   const settings = useMemo<OverlaySettings>(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -1307,15 +1322,32 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       const useGoogle = settings.ttsEngine === 'google' || (isThai && !hasThaiVoice);
 
       if (useGoogle) {
-        // Play via server-side Google TTS proxy to bypass CORS and referer blocks entirely
         const langCode = isThai ? 'th' : 'en';
-        const url = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}`;
-        const audio = new Audio(url);
+        // 1. Direct google translate client URL (Extremely reliable from residential/local streamer IPs, bypasses Cloud Run datacentre block)
+        const clientSideUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
+        const audio = new Audio(clientSideUrl);
         audio.playbackRate = settings.ttsVoiceRate || 1.0;
-        audio.play().catch(err => {
-          console.warn('Google TTS proxy play failed, falling back to Web Speech synthesis:', err);
-          speakBrowserTTS(text, isThai, voices);
-        });
+        
+        audio.play()
+          .then(() => {
+            console.log('Successfully played client-side Google Translation TTS stream');
+          })
+          .catch(err => {
+            console.warn('Client-side Google TTS failed (possibly blocked/autoplay-limit), falling back to Server TTS proxy:', err);
+            // 2. Fallback to Server Proxy
+            const serverSideUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}`;
+            const fallbackAudio = new Audio(serverSideUrl);
+            fallbackAudio.playbackRate = settings.ttsVoiceRate || 1.0;
+            fallbackAudio.play()
+              .then(() => {
+                console.log('Successfully played server-side Google TTS proxy');
+              })
+              .catch(proxyErr => {
+                console.warn('Server-side Google TTS proxy also failed, falling back to Browser Web Speech synthesis:', proxyErr);
+                // 3. Fallback to Native Speech Synthesis
+                speakBrowserTTS(text, isThai, voices);
+              });
+          });
       } else {
         speakBrowserTTS(text, isThai, voices);
       }
@@ -2293,7 +2325,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       )}
 
       {/* Tap/Click anywhere on the stream page to unlock Audio autoplay policies */}
-      {audioLocked && settings.textToSpeech && (
+      {audioLocked && settings.textToSpeech && !window.location.search.includes('overlay=true') && (
         <button 
           onClick={unlockAudio}
           className="fixed top-4 right-4 z-[99999] bg-indigo-600 hover:bg-indigo-500 font-mono text-[11px] font-bold text-white px-3 py-1.5 shadow-[0_4px_12px_rgba(0,0,0,0.5)] flex items-center gap-1.5 select-none pointer-events-auto cursor-pointer animate-pulse border border-indigo-400"
