@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Settings, Sliders, Play, Laptop, Clipboard, Check, HelpCircle, 
   MessageSquare, Heart, Gift, UserPlus, Share2, Shield, Eye, EyeOff, Volume2, 
   VolumeX, RefreshCw, Sparkles, AlertCircle, Trash2, ArrowRight, Video, ListFilter, Image,
-  Users, Trash, Crown, Clock
+  Users, Trash, Crown, Clock, Bell, Target, Award, Swords
 } from 'lucide-react';
 import { OverlaySettings, OverlayTheme, ChatMessage } from '../types';
 import OverlayView from './OverlayView';
@@ -47,6 +47,90 @@ const DEFAULT_AVATARS = [
   ...PRESET_AVATARS.slice(0, 4)
 ];
 
+const WIDGETS_LIST = [
+  {
+    id: 'donate_alert',
+    title_en: 'Donate Alert',
+    title_th: 'แจ้งเตือนการโดเนท (Alerts Only)',
+    desc: 'เครื่องมือป๊อปอัพแจ้งเตือนเมื่อเกิดกิจกรรมการสนับสนุน โดเนทไอเท็ม และกดติดตามบนหน้าจอ',
+    color: 'blue',
+    mode: 'alerts_only',
+    icon_type: 'bell',
+    category: 'alerts'
+  },
+  {
+    id: 'donate_goal',
+    title_en: 'Donate Goal',
+    title_th: 'หลอดเป้าหมายยอดโดเนท',
+    desc: 'บาร์กระตุ้นพลังงานแสดงเป้าหมายยอดสนับสนุนเป้าหมายจำลองสำหรับตกแต่งช่องสตรีม',
+    color: 'red',
+    mode: 'donate_goal',
+    icon_type: 'target',
+    category: 'stats'
+  },
+  {
+    id: 'leaderboard',
+    title_en: 'Leaderboard',
+    title_th: 'จัดอันดับผู้สนับสนุนสูงสุด',
+    desc: 'ป้ายกระดานจำลองสรุกผู้มียอดโดเนทและส่งของขวัญสูงสุดประจำวัน/สัปดาห์ในไลฟ์',
+    color: 'orange',
+    mode: 'leaderboard',
+    icon_type: 'award',
+    category: 'stats'
+  },
+  {
+    id: 'top_donate',
+    title_en: 'Top Donate',
+    title_th: 'แก้วสมทบสะสมแต้มหัวใจ',
+    desc: 'แก้วจำลองฟิสิกส์กักเก็บทุกเม็ดสติกเกอร์หัวใจ แฟนฟีเวอร์ และการรัวไลก์',
+    color: 'yellow',
+    mode: 'hearts_glass',
+    icon_type: 'crown',
+    category: 'stats'
+  },
+  {
+    id: 'recent_donate',
+    title_en: 'Recent Donate',
+    title_th: 'ประวัติและคอมเมนต์แชทสตรีม',
+    desc: 'กล่องคอมเมนต์แชทกระเตื้องสรุปกิจกรรมแชทรวมและเหตุการณ์แจ้งเตือนตกแต่งไลฟ์',
+    color: 'purple',
+    mode: 'chat_alerts',
+    icon_type: 'clock',
+    category: 'interactive'
+  },
+  {
+    id: 'gift_alert',
+    title_en: 'Gift Alert',
+    title_th: 'แจ้งเตือนเอฟเฟกต์รูปภาพ',
+    desc: 'กรองป๊อปอัพโชว์รูปภาพขวัญพิเศษ อิมเมจลิงก์ที่ผู้ชมส่งโต้ตอบพร้อมมีตติ้งยักษ์',
+    color: 'pink',
+    mode: 'images_only',
+    icon_type: 'gift',
+    category: 'alerts'
+  },
+  {
+    id: 'donate_timer',
+    title_en: 'Donate Timer',
+    title_th: 'ตัวนับถอยหลังสตรีมเวลามันส์',
+    desc: 'นวัตกรรมระบบนาฬิกาสมาร์ทรองรับแชทบวกลบเวลาสตรีมจากผู้ชมไลฟ์สดโดยตรง',
+    color: 'cyan',
+    mode: 'timer_only',
+    icon_type: 'stopwatch',
+    isNew: true,
+    category: 'interactive'
+  },
+  {
+    id: 'live_battle',
+    title_en: 'Live Battle',
+    title_th: 'บอสเกมและแชทอวตารเดินสู้',
+    desc: 'ห้องรวมภาพอนิเมชันจำลองกองทัพอวตารผู้ชมแชทวิ่งเล่นคุยและกระโดดป่วนเต็มบนหน้าจอ',
+    color: 'green',
+    mode: 'avatars',
+    icon_type: 'swords',
+    category: 'interactive'
+  }
+];
+
 export default function DashboardView() {
   const [settings, setSettings] = useState<OverlaySettings>(() => {
     const saved = localStorage.getItem('obs_overlay_settings');
@@ -65,6 +149,12 @@ export default function DashboardView() {
           textToSpeech: false,
           ttsVoiceRate: 1.0,
           ttsVoicePitch: 1.0,
+          ttsEngine: 'google',
+          ttsReadChat: true,
+          ttsReadGift: true,
+          ttsReadFollow: true,
+          ttsReadShareImage: true,
+          ttsSkipNickname: false,
           highlightKeywords: ['obs', 'indofinity', 'stream', 'highlight'],
           ignoredUsers: [],
           animationStyle: 'slide-up',
@@ -76,6 +166,16 @@ export default function DashboardView() {
           testViewerCount: 1,
           hideWhenIdle: true,
           idleTimeout: 60,
+          spawnOnlyOnActivity: true,
+          showWalkingAvatars: true,
+          maxVisitorAvatars: 1,
+          fontFamily: 'Prompt',
+          showTimer: false,
+          timerDuration: 300,
+          timerPosition: 'top-left',
+          timerOnlyNumbers: false,
+          timerGlowColor: 'cyan',
+          timerFontSize: 48,
           ...parsed
         };
       } catch (e) {
@@ -94,6 +194,12 @@ export default function DashboardView() {
       textToSpeech: false,
       ttsVoiceRate: 1.0,
       ttsVoicePitch: 1.0,
+      ttsEngine: 'google',
+      ttsReadChat: true,
+      ttsReadGift: true,
+      ttsReadFollow: true,
+      ttsReadShareImage: true,
+      ttsSkipNickname: false,
       highlightKeywords: ['obs', 'indofinity', 'stream', 'highlight'],
       ignoredUsers: [],
       animationStyle: 'slide-up',
@@ -104,7 +210,17 @@ export default function DashboardView() {
       hideAvatarsWhenNoViewers: false,
       testViewerCount: 1,
       hideWhenIdle: true,
-      idleTimeout: 60
+      idleTimeout: 60,
+      spawnOnlyOnActivity: true,
+      showWalkingAvatars: true,
+      maxVisitorAvatars: 1,
+      fontFamily: 'Prompt',
+      showTimer: false,
+      timerDuration: 300,
+      timerPosition: 'top-left',
+      timerOnlyNumbers: false,
+      timerGlowColor: 'cyan',
+      timerFontSize: 48
     };
   });
 
@@ -112,6 +228,26 @@ export default function DashboardView() {
   useEffect(() => {
     localStorage.setItem('obs_overlay_settings', JSON.stringify(settings));
   }, [settings]);
+
+  // Load custom selected font dynamically on the Dashboard too for clean local settings preview!
+  useEffect(() => {
+    if (settings.fontFamily) {
+      try {
+        const linkId = 'custom-google-font-dashboard-stylesheet';
+        let linkElement = document.getElementById(linkId) as HTMLLinkElement;
+        if (!linkElement) {
+          linkElement = document.createElement('link');
+          linkElement.id = linkId;
+          linkElement.rel = 'stylesheet';
+          document.head.appendChild(linkElement);
+        }
+        const fontName = settings.fontFamily.replace(/\s+/g, '+');
+        linkElement.href = `https://fonts.googleapis.com/css2?family=${fontName}:wght@300;400;500;600;700;800;900&display=swap`;
+      } catch (err) {
+        console.warn('Failed to load Google Font on dashboard:', err);
+      }
+    }
+  }, [settings.fontFamily]);
 
   // Handle URL synchronizing, so even if the browser is reloaded or links generated, they stay synchronized
   useEffect(() => {
@@ -130,11 +266,29 @@ export default function DashboardView() {
     }
   }, []);
 
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      const loadVoices = () => {
+        const list = window.speechSynthesis.getVoices();
+        setVoices(list);
+      };
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+      return () => {
+        window.speechSynthesis.onvoiceschanged = null;
+      };
+    }
+  }, []);
+
   const [copiedChat, setCopiedChat] = useState(false);
   const [copiedChatOnly, setCopiedChatOnly] = useState(false);
   const [copiedAlertsOnly, setCopiedAlertsOnly] = useState(false);
   const [copiedImages, setCopiedImages] = useState(false);
   const [copiedAvatars, setCopiedAvatars] = useState(false);
+  const [copiedHearts, setCopiedHearts] = useState(false);
+  const [copiedTimer, setCopiedTimer] = useState(false);
   const [backgroundType, setBackgroundType] = useState<'checkerboard' | 'game' | 'dark' | 'green'>('game');
   const [customComment, setCustomComment] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
@@ -145,7 +299,93 @@ export default function DashboardView() {
   const [newAvatarUrl, setNewAvatarUrl] = useState('');
   const [newAvatarScale, setNewAvatarScale] = useState(1.0);
   
-  const [activeTab, setActiveTab] = useState<'general' | 'design' | 'avatars' | 'audio' | 'filter'>('general');
+  const [activeTab, setActiveTab] = useState<'widgets' | 'general' | 'design' | 'avatars' | 'audio' | 'filter'>('widgets');
+  const [currentPage, setCurrentPage] = useState<'widgets' | 'history' | 'withdraw' | 'integrations'>('widgets');
+  const [withdrawAmount, setWithdrawAmount] = useState('2500');
+  const [withdrawPhone, setWithdrawPhone] = useState('089-123-4567');
+  const [withdrawSuccess, setWithdrawSuccess] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'alerts' | 'stats' | 'interactive'>('all');
+  const [copiedWidgetId, setCopiedWidgetId] = useState<string | null>(null);
+
+  const [dbTimerLeft, setDbTimerLeft] = useState<number>(300);
+  const [dbTimerActive, setDbTimerActive] = useState<boolean>(false);
+
+  // Keep track of master timer state from the server for smooth client-side interpolation
+  const dbTimerSyncRef = useRef<{
+    serverSeconds: number;
+    serverActive: boolean;
+    localTimeOfFetch: number;
+  }>({
+    serverSeconds: 300,
+    serverActive: false,
+    localTimeOfFetch: Date.now(),
+  });
+
+  // Sync countdown timer state on the Dashboard periodically with server
+  useEffect(() => {
+    let syncInterval: any;
+    let tickInterval: any;
+
+    const fetchTimerState = async () => {
+      try {
+        const res = await fetch('/api/timer');
+        if (res.ok) {
+          const data = await res.json();
+          dbTimerSyncRef.current = {
+            serverSeconds: data.secondsRemaining,
+            serverActive: data.isActive,
+            localTimeOfFetch: Date.now()
+          };
+          setDbTimerActive(data.isActive);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch timer on dashboard:', err);
+      }
+    };
+
+    fetchTimerState();
+    syncInterval = setInterval(fetchTimerState, 1200);
+
+    // Keep counting down locally at high speed for perfectly smooth visual output
+    tickInterval = setInterval(() => {
+      const { serverSeconds, serverActive, localTimeOfFetch } = dbTimerSyncRef.current;
+      if (serverActive) {
+        const elapsedSinceFetch = (Date.now() - localTimeOfFetch) / 1000;
+        const computedSeconds = Math.max(0, serverSeconds - elapsedSinceFetch);
+        setDbTimerLeft(computedSeconds);
+      } else {
+        setDbTimerLeft(serverSeconds);
+      }
+    }, 100);
+
+    return () => {
+      clearInterval(syncInterval);
+      clearInterval(tickInterval);
+    };
+  }, []);
+
+  // Helper to send actions (+time, -time, play, pause, reset) to Express server
+  const sendTimerAction = async (action: string, seconds?: number) => {
+    try {
+      const res = await fetch('/api/timer/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, seconds })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        dbTimerSyncRef.current = {
+          serverSeconds: data.secondsRemaining,
+          serverActive: data.isActive,
+          localTimeOfFetch: Date.now()
+        };
+        setDbTimerLeft(data.secondsRemaining);
+        setDbTimerActive(data.isActive);
+      }
+    } catch (err) {
+      console.error('Failed to post timer action:', err);
+    }
+  };
   const [marketplaceTab, setMarketplaceTab] = useState<'vector' | 'classic'>('vector');
 
   const addCustomAvatar = (name: string, spriteUrl: string, scale: number) => {
@@ -209,7 +449,7 @@ export default function DashboardView() {
   ];
 
   // Helper to build a clean overlay URL with custom override parameter
-  const buildOverlayUrl = (mode: 'chat_alerts' | 'images_only' | 'chat_only' | 'alerts_only' | 'avatars') => {
+  const buildOverlayUrl = (mode: 'chat_alerts' | 'images_only' | 'chat_only' | 'alerts_only' | 'avatars' | 'hearts_glass' | 'timer_only' | 'donate_goal' | 'leaderboard') => {
     const base = window.location.origin;
     const params = new URLSearchParams();
     
@@ -226,6 +466,17 @@ export default function DashboardView() {
     params.set('textToSpeech', settings.textToSpeech.toString());
     params.set('ttsVoiceRate', settings.ttsVoiceRate.toString());
     params.set('ttsVoicePitch', settings.ttsVoicePitch.toString());
+    if (settings.ttsVoiceName) {
+      params.set('ttsVoiceName', settings.ttsVoiceName);
+    }
+    if (settings.ttsEngine) {
+      params.set('ttsEngine', settings.ttsEngine);
+    }
+    params.set('ttsReadChat', (settings.ttsReadChat !== false).toString());
+    params.set('ttsReadGift', (settings.ttsReadGift !== false).toString());
+    params.set('ttsReadFollow', (settings.ttsReadFollow !== false).toString());
+    params.set('ttsReadShareImage', (settings.ttsReadShareImage !== false).toString());
+    params.set('ttsSkipNickname', (settings.ttsSkipNickname ?? false).toString());
     params.set('animationStyle', settings.animationStyle);
     params.set('showImageAlerts', (settings.showImageAlerts !== false).toString());
     params.set('vectorAvatarSpeed', (settings.vectorAvatarSpeed ?? 1.0).toString());
@@ -233,6 +484,19 @@ export default function DashboardView() {
     params.set('testViewerCount', (settings.testViewerCount ?? 1).toString());
     params.set('hideWhenIdle', (settings.hideWhenIdle ?? true).toString());
     params.set('idleTimeout', (settings.idleTimeout ?? 60).toString());
+    params.set('spawnOnlyOnActivity', (settings.spawnOnlyOnActivity ?? true).toString());
+    params.set('showWalkingAvatars', (settings.showWalkingAvatars !== false).toString());
+    params.set('maxVisitorAvatars', (settings.maxVisitorAvatars ?? 1).toString());
+    params.set('glassType', settings.glassType || 'beer');
+    if (settings.fontFamily) {
+      params.set('fontFamily', settings.fontFamily);
+    }
+    params.set('showTimer', (settings.showTimer ?? false).toString());
+    params.set('timerDuration', (settings.timerDuration ?? 300).toString());
+    params.set('timerPosition', settings.timerPosition || 'top-left');
+    params.set('timerOnlyNumbers', (settings.timerOnlyNumbers ?? false).toString());
+    params.set('timerGlowColor', settings.timerGlowColor || 'cyan');
+    params.set('timerFontSize', (settings.timerFontSize ?? 48).toString());
     
     if (settings.highlightKeywords.length > 0) {
       params.set('highlightKeywords', settings.highlightKeywords.join(','));
@@ -249,6 +513,10 @@ export default function DashboardView() {
   const alertsOnlyOverlayUrl = buildOverlayUrl('alerts_only');
   const imagesOnlyOverlayUrl = buildOverlayUrl('images_only');
   const avatarsOnlyOverlayUrl = buildOverlayUrl('avatars');
+  const heartsGlassOverlayUrl = buildOverlayUrl('hearts_glass');
+  const timerOnlyOverlayUrl = buildOverlayUrl('timer_only');
+  const donateGoalOverlayUrl = buildOverlayUrl('donate_goal');
+  const leaderboardOverlayUrl = buildOverlayUrl('leaderboard');
 
   const copyChatToClipboard = () => {
     navigator.clipboard.writeText(chatAlertsOverlayUrl);
@@ -278,6 +546,18 @@ export default function DashboardView() {
     navigator.clipboard.writeText(avatarsOnlyOverlayUrl);
     setCopiedAvatars(true);
     setTimeout(() => setCopiedAvatars(false), 3000);
+  };
+
+  const copyHeartsToClipboard = () => {
+    navigator.clipboard.writeText(heartsGlassOverlayUrl);
+    setCopiedHearts(true);
+    setTimeout(() => setCopiedHearts(false), 3000);
+  };
+
+  const copyTimerToClipboard = () => {
+    navigator.clipboard.writeText(timerOnlyOverlayUrl);
+    setCopiedTimer(true);
+    setTimeout(() => setCopiedTimer(false), 3000);
   };
 
   // Chat Simulator Trigger functions sending events via browser dispatch listeners
@@ -326,8 +606,8 @@ export default function DashboardView() {
     
     sendSimulatedEvent({
       type: 'gift',
-      uniqueId: 'rich_gifter_' + Math.floor(Math.random() * 90 + 10),
-      nickname: 'Vip_Gifter_' + repeat,
+      uniqueId: 'test_gifter',
+      nickname: 'สายเปย์หรอยแรง',
       profilePictureUrl: settings.showAvatars ? gift.pfp : undefined,
       giftName: gift.name,
       repeatCount: repeat,
@@ -340,8 +620,8 @@ export default function DashboardView() {
     const randomIdx = Math.floor(Math.random() * mockAvatarUrls.length);
     sendSimulatedEvent({
       type: 'follow',
-      uniqueId: 'new_follower_' + Math.floor(Math.random() * 900 + 100),
-      nickname: 'Follower_Friend_' + randomIdx,
+      uniqueId: 'test_follower',
+      nickname: 'ผู้ติดตามใหม่',
       profilePictureUrl: settings.showAvatars ? mockAvatarUrls[randomIdx] : undefined
     });
   };
@@ -350,8 +630,8 @@ export default function DashboardView() {
     const randomIdx = Math.floor(Math.random() * mockAvatarUrls.length);
     sendSimulatedEvent({
       type: 'like',
-      uniqueId: 'liker_' + Math.floor(Math.random() * 900 + 100),
-      nickname: 'Liker_Fan_' + randomIdx,
+      uniqueId: 'test_liker',
+      nickname: 'แฟนตัวยง',
       profilePictureUrl: settings.showAvatars ? mockAvatarUrls[randomIdx] : undefined,
       likeCount: Math.floor(Math.random() * 12) + 1
     });
@@ -361,8 +641,8 @@ export default function DashboardView() {
     const randomIdx = Math.floor(Math.random() * mockAvatarUrls.length);
     sendSimulatedEvent({
       type: 'share',
-      uniqueId: 'sharer_' + Math.floor(Math.random() * 9000),
-      nickname: 'Share_Buddy_' + randomIdx,
+      uniqueId: 'test_sharer',
+      nickname: 'คนช่วยแชร์',
       profilePictureUrl: settings.showAvatars ? mockAvatarUrls[randomIdx] : undefined
     });
   };
@@ -440,85 +720,282 @@ export default function DashboardView() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0c0e] text-[#e2e2e7] flex flex-col font-sans select-none" id="stream-designer">
-      {/* Top Header of Design Panel */}
-      <header className="border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="bg-zinc-900 border border-zinc-800 p-2.5 rounded-sm text-indigo-400">
-            <Sparkles className="w-5 h-5 animate-pulse" />
+    <div className="min-h-screen bg-[#060608] text-[#e2e2e7] flex font-sans select-none overflow-hidden" id="easy-donate-dashboard">
+      
+      {/* 1. EASYDONATE-STYLE SIDEBAR NAVIGATION */}
+      <aside className="w-[260px] bg-[#0c0c0f] border-r border-[#1a1a24] flex flex-col justify-between shrink-0 hidden md:flex font-sans">
+        <div className="flex flex-col">
+          {/* Header/Logo */}
+          <div className="px-5 py-[18px] border-b border-[#13131a] flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="bg-gradient-to-tr from-[#7c3aed] to-cyan-400 p-2 rounded-xl text-white shadow-[0_0_15px_rgba(124,58,237,0.35)]">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold tracking-wider text-white font-mono flex items-center gap-1">
+                  EASY<span className="text-cyan-400 font-extrabold text-xs">DONATE</span>
+                </h2>
+                <p className="text-[10px] text-zinc-500 font-medium tracking-tight">Creator Console v2.5</p>
+              </div>
+            </div>
+            <span className="text-[9px] bg-cyan-950 text-cyan-400 border border-cyan-500/20 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">PRO</span>
           </div>
-          <div>
-            <h1 className="text-lg font-mono font-bold tracking-tight text-white flex items-center gap-2">
-              IndoFinity.Stream<span className="font-extrabold text-[#7c3aed]">Overlay</span>
-              <span className="text-[9px] bg-indigo-950 border border-indigo-500/30 text-indigo-300 font-mono tracking-widest px-1.5 py-0.5 rounded-none uppercase font-bold">OBS วิดเจ็ต</span>
-            </h1>
-            <p className="text-xs text-zinc-400 font-sans tracking-wide">เครื่องมือปรับแต่งสไตล์ข้อความและการแจ้งเตือนบนหน้าจออย่างสวยงามสำหรับสตรีมที่เสถียรที่สุด</p>
+
+          {/* User Profile Overview */}
+          <div className="p-3 mx-3 my-4 bg-gradient-to-b from-[#111116] to-[#07070a] border border-[#161622] rounded-xl flex items-center gap-3">
+            <div className="relative shrink-0">
+              <div className="w-9 h-9 rounded-full overflow-hidden border border-cyan-500/30 bg-indigo-950 p-0.5 shadow-md">
+                <img src={mockAvatarUrls[0]} className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+              </div>
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-[#0c0c0f] rounded-full"></span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-xs font-bold text-zinc-200 truncate">Lantat_Streamer</h4>
+              <p className="text-[9px] text-emerald-400 font-medium flex items-center gap-1 mt-0.5">
+                ● สตรีมออนไลน์อยู่
+              </p>
+            </div>
           </div>
+
+          {/* Navigation Items */}
+          <nav className="px-2.5 space-y-1">
+            {[
+              { id: 'widgets', title: 'ตัวจัดการวิดเจ็ตสตรีม', icon: Laptop, badge: '6' },
+              { id: 'history', title: 'ประวัติโดเนท & สนับสนุน', icon: ListFilter, badge: '7' },
+              { id: 'withdraw', title: 'การถอนรายได้ & บัญชี', icon: Gift, badge: '฿15K' },
+              { id: 'integrations', title: 'เชื่อมต่อระบบสตรีม', icon: Settings, badge: 'HOT' }
+            ].map(item => {
+              const Icon = item.icon;
+              const isActive = currentPage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setCurrentPage(item.id as any)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 transition-all rounded-lg text-xs font-medium cursor-pointer ${
+                    isActive 
+                      ? 'bg-gradient-to-r from-[#7c3aed]/15 to-[#3b82f6]/5 text-white border-l-4 border-[#7c3aed] font-semibold pl-4 shadow-sm' 
+                      : 'text-zinc-450 hover:text-zinc-200 hover:bg-zinc-900/40 border-l-4 border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-[#7c3aed]' : 'text-zinc-500'}`} />
+                    <span>{item.title}</span>
+                  </div>
+                  {item.badge && (
+                    <span className={`text-[9px] px-1.5 py-0.5 font-bold font-mono rounded ${
+                      isActive ? 'bg-[#7c3aed]/20 text-[#a78bfa]' : 'bg-zinc-900 text-zinc-500'
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* Real-time Socket Indicator status */}
-        <div className="flex items-center gap-3.5 bg-zinc-900/40 border border-zinc-800/80 px-3.5 py-1.5 rounded-none">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        {/* Footer info */}
+        <div className="p-4 border-t border-[#13131a] bg-[#0c0c0f]">
+          <div className="flex items-center justify-between text-[11px] text-zinc-500">
+            <span>เซิร์ฟเวอร์หลัก: ไทย</span>
+            <span className="text-emerald-500 font-mono font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 99.9%
             </span>
-            <span className="font-mono text-[10px] text-emerald-400 font-bold uppercase tracking-widest">ระบบสตูดิโอทำงานอยู่</span>
           </div>
-          <span className="text-zinc-800">|</span>
-          <span className="text-xs text-zinc-400 font-mono tracking-tight">พอร์ต WS: 62024</span>
         </div>
-      </header>
+      </aside>
 
-      {/* Main Grid: Control Panel (Left), Simulated Stream Backdrop (Center), Stream Control Panel (Right) */}
-      <div className="flex-grow grid grid-cols-1 xl:grid-cols-12 xl:overflow-hidden xl:h-[calc(100vh-69px)] overflow-y-auto">
+      {/* 2. MAIN WORKSPACE CONTAINER */}
+      <main className="flex-grow flex flex-col overflow-hidden h-screen bg-[#07070a]">
+        
+        {/* PREMIUM TOP HEADER BAR */}
+        <header className="border-b border-[#14141e] bg-[#0c0c0f]/90 backdrop-blur-md px-6 py-4 flex items-center justify-between shadow-xs shrink-0 z-10 font-sans">
+          <div className="flex items-center gap-3">
+            <h1 className="text-sm font-bold tracking-tight text-white flex items-center gap-2">
+              {currentPage === 'widgets' && '🔌 ตัวจัดการคลังวิดเจ็ตสตรีม OBS'}
+              {currentPage === 'history' && '📊 รายงานประวัติการส่งสนับสนุนล่าสุด'}
+              {currentPage === 'withdraw' && '💸 แดชบอร์ดรายได้และการถอนเงิน'}
+              {currentPage === 'integrations' && '⚙️ ตั้งค่าเชื่อมต่อระบบไลฟ์สตรีมเมอร์'}
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Wallet Quick Balance badge */}
+            <div 
+              onClick={() => setCurrentPage('withdraw')}
+              className="hidden sm:flex items-center gap-3 bg-[#111117] hover:bg-[#161622] transition-colors border border-[#1b1b2a] px-3.5 py-1 rounded-xl cursor-pointer"
+            >
+              <div className="bg-[#7c3aed]/10 p-1.5 rounded-lg">
+                <Gift className="w-3.5 h-3.5 text-cyan-400 animate-bounce" />
+              </div>
+              <div className="text-left">
+                <span className="text-[9px] text-zinc-500 block uppercase font-bold tracking-wider leading-none">ยอดสะสมถอนได้</span>
+                <span className="text-xs font-black text-white font-mono tracking-wide leading-none">฿15,250.00</span>
+              </div>
+              <button className="bg-[#7c3aed] text-white hover:bg-[#6d28d9] px-2 py-1 rounded text-[9px] font-bold font-sans">
+                ถอนรายได้
+              </button>
+            </div>
+
+            {/* Quick Status Indicator */}
+            <div className="flex items-center gap-3 bg-[#111116] border border-[#161624] px-4 py-2 rounded-xl">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-[10px] text-zinc-300 font-mono tracking-tight font-bold uppercase">ระบบพร้อมใช้งาน</span>
+            </div>
+          </div>
+        </header>
+
+        {/* 3. CORE PAGE SWITCHER AREA */}
+        <div className="flex-grow overflow-hidden relative">
+          
+          {currentPage === 'widgets' ? (
+            <div className="w-full h-full grid grid-cols-1 xl:grid-cols-12 xl:overflow-hidden overflow-y-auto">
         {/* Left column config workspace (Span 4) */}
         <section className="xl:col-span-4 border-r border-zinc-900 bg-zinc-950/40 flex flex-col h-auto xl:h-full overflow-hidden">
           {/* Tabs for settings */}
-          <div className="flex border-b border-zinc-900 shrink-0 bg-zinc-950/80 font-mono text-[11px] uppercase tracking-wider font-bold">
+          <div className="grid grid-cols-2 gap-1.5 p-3.5 border-b border-[#14141f] shrink-0 bg-[#0c0c11]/90 select-none">
             <button 
-              onClick={() => setActiveTab('general')}
-              className={`flex-grow py-3 text-center border-b-2 items-center justify-center gap-1.5 flex transition-all ${
-                activeTab === 'general' ? 'border-indigo-500 text-white bg-zinc-900/40' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              onClick={() => setActiveTab('widgets')}
+              className={`px-2.5 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 border ${
+                activeTab === 'widgets' 
+                  ? 'bg-cyan-950/45 text-cyan-400 border-cyan-800/30 shadow-[0_0_10px_rgba(34,211,238,0.1)]' 
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#111117] border-transparent'
               }`}
             >
-              <Settings className="w-3.5 h-3.5" /> การจัดวาง
+              <Laptop className="w-3.5 h-3.5" /> วิดเจ็ต OBS
+            </button>
+            <button 
+              onClick={() => setActiveTab('general')}
+              className={`px-2.5 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 border ${
+                activeTab === 'general' 
+                  ? 'bg-indigo-950/45 text-indigo-400 border-indigo-800/30' 
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#111117] border-transparent'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" /> แคมเปญ
             </button>
             <button 
               onClick={() => setActiveTab('design')}
-              className={`flex-grow py-3 text-center border-b-2 items-center justify-center gap-1.5 flex transition-all ${
-                activeTab === 'design' ? 'border-[#7c3aed] text-white bg-zinc-900/40' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              className={`px-2.5 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 border ${
+                activeTab === 'design' 
+                  ? 'bg-purple-950/45 text-purple-400 border-purple-800/30' 
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#111117] border-transparent'
               }`}
             >
-              <Sliders className="w-3.5 h-3.5" /> ธีมแสดงแชท
+              <Sliders className="w-3.5 h-3.5" /> ธีมแชท
             </button>
             <button 
               onClick={() => setActiveTab('avatars')}
-              className={`flex-grow py-3 text-center border-b-2 items-center justify-center gap-1.5 flex transition-all ${
-                activeTab === 'avatars' ? 'border-pink-500 text-white bg-zinc-900/40' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              className={`px-2.5 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 border ${
+                activeTab === 'avatars' 
+                  ? 'bg-pink-950/45 text-pink-400 border-pink-800/30' 
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#111117] border-transparent'
               }`}
             >
-              <Users className="w-3.5 h-3.5 text-pink-450" /> ตั้งค่าอวตาร (NEW)
+              <Users className="w-3.5 h-3.5" /> อวตารแชท
             </button>
             <button 
               onClick={() => setActiveTab('audio')}
-              className={`flex-grow py-3 text-center border-b-2 items-center justify-center gap-1.5 flex transition-all ${
-                activeTab === 'audio' ? 'border-amber-500 text-white bg-zinc-900/40' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              className={`px-2.5 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 border ${
+                activeTab === 'audio' 
+                  ? 'bg-amber-950/45 text-amber-400 border-amber-800/30' 
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#111117] border-transparent'
               }`}
             >
-              <Volume2 className="w-3.5 h-3.5" /> ปรับค่าเสียง
+              <Volume2 className="w-3.5 h-3.5" /> ปรับเสียง
             </button>
             <button 
               onClick={() => setActiveTab('filter')}
-              className={`flex-grow py-3 text-center border-b-2 items-center justify-center gap-1.5 flex transition-all ${
-                activeTab === 'filter' ? 'border-rose-500 text-white bg-zinc-900/40' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              className={`px-2.5 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 border ${
+                activeTab === 'filter' 
+                  ? 'bg-rose-950/45 text-rose-400 border-rose-800/30' 
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#111117] border-transparent'
               }`}
             >
-              <ListFilter className="w-3.5 h-3.5" /> ตัวกรองแชท
+              <ListFilter className="w-3.5 h-3.5" /> ตัวกรอง
             </button>
           </div>
 
           <div className="p-5 flex-1 overflow-y-auto space-y-6">
+            {/* WIDGETS MANAGER INSTRUCTIONS TAB */}
+            {activeTab === 'widgets' && (
+              <div className="space-y-6">
+                <div className="bg-gradient-to-r from-cyan-950/40 to-blue-950/40 border border-cyan-800/25 p-4 rounded-xl space-y-1.5 shadow-lg">
+                  <h3 className="text-xs font-black uppercase text-cyan-400 font-mono tracking-wider flex items-center gap-1.5">
+                    <Laptop className="w-4 h-4" /> แนะนำการติดตั้งใน OBS / Streamlabs
+                  </h3>
+                  <p className="text-[11.5px] text-zinc-300 leading-relaxed font-sans">
+                    คุณสามารถเพลิดเพลินกับสารพัดวิดเจ็ตเพื่อสื่อสารโต้ตอบกับผู้ชมบนช่องสตรีมได้เต็มที่ ทำตามขั้นตอนดังนี้:
+                  </p>
+                </div>
+                
+                <div className="space-y-3.5 font-sans text-xs">
+                  <div className="flex items-start gap-2.5">
+                    <div className="bg-zinc-900 border border-zinc-800 font-mono text-[10px] text-cyan-400 w-5 h-5 flex-shrink-0 flex items-center justify-center font-bold rounded-full">1</div>
+                    <p className="text-zinc-300 leading-relaxed pt-0.5">
+                      เลือกตัววิดเจ็ตที่คุณสนใจจากคลังทางขวา เพื่อดูตัวอย่าง พรีวิว และคอยปรับสตรีมจำลอง
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <div className="bg-zinc-900 border border-zinc-800 font-mono text-[10px] text-cyan-400 w-5 h-5 flex-shrink-0 flex items-center justify-center font-bold rounded-full">2</div>
+                    <p className="text-zinc-300 leading-relaxed pt-0.5">
+                      กดปุ่ม <strong className="text-white">"คัดลอกลิงก์ OBS"</strong> ใต้การ์ดวิดเจ็ตนั้นไปใช้งาน
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <div className="bg-zinc-900 border border-zinc-800 font-mono text-[10px] text-cyan-400 w-5 h-5 flex-shrink-0 flex items-center justify-center font-bold rounded-full">3</div>
+                    <p className="text-zinc-300 leading-relaxed pt-0.5">
+                      ใน OBS ของคุณ คลิกเพิ่ม <strong className="text-zinc-100 font-mono font-bold">(+) Sources</strong> เลือก <strong className="text-[#00F0FF] font-black">"Browser"</strong>
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <div className="bg-zinc-900 border border-zinc-800 font-mono text-[10px] text-cyan-400 w-5 h-5 flex-shrink-0 flex items-center justify-center font-bold rounded-full">4</div>
+                    <p className="text-zinc-300 leading-relaxed pt-0.5">
+                      วาง URL ที่ได้ และกำหนดขนาดสัดส่วนจอเป็น <strong className="text-cyan-400 font-black font-mono">1920 x 1080</strong> (เพื่อให้แสดงสีกราฟิกคมชัดสวยงาม)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t border-zinc-900 pt-5 space-y-3">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 font-mono">🚀 ตั้งค่าด่วนสำหรับคลังวิดเจ็ตสตรีม:</h4>
+                  <div className="bg-zinc-950/80 border border-zinc-900 p-4 space-y-4 rounded-xl shadow-inner">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-zinc-400">ขนาดความใหญ่ฟอนต์วิดเจ็ต</span>
+                        <span className="font-mono text-cyan-400 font-black">{settings.fontSize}px</span>
+                      </div>
+                      <input 
+                        type="range"
+                        min="12"
+                        max="48"
+                        value={settings.fontSize}
+                        onChange={(e) => setSettings(prev => ({ ...prev, fontSize: parseInt(e.target.value) }))}
+                        className="w-full h-1 bg-zinc-850 rounded appearance-none cursor-pointer accent-cyan-500"
+                      />
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      <span className="text-xs text-zinc-400">เลือกฟอนต์หลักตัวหนังสือ (Thai Google Font)</span>
+                      <select
+                        value={settings.fontFamily || 'Prompt'}
+                        onChange={(e) => setSettings(prev => ({ ...prev, fontFamily: e.target.value }))}
+                        className="w-full bg-zinc-900 text-xs border border-zinc-800 rounded px-2.5 py-2 text-white font-sans focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="Prompt">Prompt (โมเดิร์นยอดฮิต)</option>
+                        <option value="Sarabun">Sarabun (ทางการเรียบร้อย)</option>
+                        <option value="Chakra Petch">Chakra Petch (เกมมิ่งไซไฟ)</option>
+                        <option value="Mitr">Mitr (กลมมนน่ารัก)</option>
+                        <option value="JetBrains Mono">JetBrains Mono (คอมพิวเตอร์เท่ห์)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* GENERAL LAYOUT TAB */}
             {activeTab === 'general' && (
               <div className="space-y-6">
@@ -644,6 +1121,230 @@ export default function DashboardView() {
                     </button>
                   </div>
                 </div>
+
+                {/* ⏱️ COUNTDOWN STREAM TIMER PANEL (NEW 🔥) */}
+                <div className="p-4 bg-zinc-900/60 border border-indigo-900/30 rounded-lg space-y-4 pt-3.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-mono font-bold text-indigo-400 uppercase flex items-center gap-1.5">
+                        ⏱️ ตัวจับเวลาถอยหลังสตรีม (Stream Countdown Timer)
+                      </h4>
+                      <p className="text-[11px] text-zinc-550 mt-0.5">
+                        เปิด/ปิด และแก้ไขนับเวลาถอยหลังแบบเรียลไทม์ ซิงค์ทันทีกับจอ OBS
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setSettings(prev => ({ ...prev, showTimer: !prev.showTimer }))}
+                      className={`w-10 h-5.5 rounded-none flex items-center p-1 cursor-pointer transition-colors ${
+                        settings.showTimer ? 'bg-indigo-600 justify-end' : 'bg-zinc-850 justify-start'
+                      }`}
+                    >
+                      <span className="w-3.5 h-3.5 bg-white" />
+                    </button>
+                  </div>
+
+                  {settings.showTimer && (
+                    <div className="space-y-3.5 border-t border-zinc-800/60 pt-3">
+                      {/* Timer State Readout and Control Buttons */}
+                      <div className="flex items-center justify-between bg-zinc-950 p-3 border border-zinc-850">
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-zinc-550 font-mono tracking-widest block font-bold">เวลาที่เหลืออยู่</span>
+                          <span className="text-2xl font-black text-cyan-400 font-mono tracking-wider leading-none">
+                            {(() => {
+                              const totalSecs = Math.max(0, Math.ceil(dbTimerLeft));
+                              const hh = Math.floor(totalSecs / 3600);
+                              const mm = Math.floor((totalSecs % 3600) / 60);
+                              const ss = totalSecs % 60;
+                              const pad = (num: number) => String(num).padStart(2, '0');
+                              return hh > 0 ? `${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+                            })()}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {dbTimerActive ? (
+                            <button
+                              onClick={() => sendTimerAction('pause')}
+                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 font-mono font-bold text-[11px] text-white flex items-center gap-1 cursor-pointer"
+                              title="หยุดชั่วคราว"
+                            >
+                              ⏸️ หยุดชั่วคราว
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => sendTimerAction('start')}
+                              className="px-3 py-1.5 bg-green-600 hover:bg-green-500 font-mono font-bold text-[11px] text-white flex items-center gap-1 cursor-pointer"
+                              title="เริ่มนับถอยหลัง"
+                            >
+                              ▶️ เริ่มจับเวลา
+                            </button>
+                          )}
+                          <button
+                            onClick={() => sendTimerAction('reset')}
+                            className="px-2.5 py-1.5 bg-zinc-810 hover:bg-zinc-700 font-mono font-bold text-[11px] text-zinc-300 cursor-pointer"
+                            title="รีเซ็ตเวลาใหม่"
+                          >
+                            🔄 รีเซ็ต (5 นาที)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Add & Subtract Time Grid */}
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] text-zinc-400 font-bold block">บวกเวลา (+) หรือ ลบเวลา (-) ชั่วคราว:</span>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          <button
+                            onClick={() => sendTimerAction('add', 60)}
+                            className="py-1 bg-zinc-800 hover:bg-zinc-700 text-xs font-mono font-bold text-emerald-400 border border-zinc-700/60 cursor-pointer"
+                          >
+                            +1 นาที
+                          </button>
+                          <button
+                            onClick={() => sendTimerAction('add', 300)}
+                            className="py-1 bg-zinc-800 hover:bg-zinc-700 text-xs font-mono font-bold text-emerald-400 border border-zinc-700/60 cursor-pointer"
+                          >
+                            +5 นาที
+                          </button>
+                          <button
+                            onClick={() => sendTimerAction('subtract', 60)}
+                            className="py-1 bg-zinc-800 hover:bg-zinc-700 text-xs font-mono font-bold text-rose-400 border border-zinc-700/60 cursor-pointer"
+                          >
+                            -1 นาที
+                          </button>
+                          <button
+                            onClick={() => sendTimerAction('subtract', 300)}
+                            className="py-1 bg-zinc-800 hover:bg-zinc-700 text-xs font-mono font-bold text-rose-400 border border-zinc-700/60 cursor-pointer"
+                          >
+                            -5 นาที
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Custom Time Input & Position Selector */}
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] text-zinc-400 font-bold block">กำหนดเวลาใหม่ (นาที):</span>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="number"
+                              min="1"
+                              max="999"
+                              placeholder="5"
+                              id="custom-timer-minutes-input"
+                              className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1 font-mono text-xs text-white"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  const val = Number((e.currentTarget as HTMLInputElement).value);
+                                  if (val > 0) {
+                                    sendTimerAction('reset', val * 60);
+                                  }
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={() => {
+                                const el = document.getElementById('custom-timer-minutes-input') as HTMLInputElement;
+                                if (el) {
+                                  const val = Number(el.value);
+                                  if (val > 0) {
+                                    sendTimerAction('reset', val * 60);
+                                  }
+                                }
+                              }}
+                              className="px-2 py-1 bg-indigo-600 hover:bg-indigo-505 text-xs text-white font-mono font-bold cursor-pointer"
+                            >
+                              ตั้งค่า
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] text-zinc-400 font-bold block">ตำแหน่งแสดงบนสตรีม:</span>
+                          <select
+                            value={settings.timerPosition}
+                            onChange={(e) => setSettings(prev => ({ ...prev, timerPosition: e.target.value as any }))}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 font-mono text-xs text-white focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="top-left">↖️ ซ้ายบน (Top-Left)</option>
+                            <option value="top-right">↗️ ขวาบน (Top-Right)</option>
+                            <option value="bottom-left">↙️ ซ้ายล่าง (Bottom-Left)</option>
+                            <option value="bottom-right">↘️ ขวาล่าง (Bottom-Right)</option>
+                            <option value="top-center">⬆️ กึ่งกลางบน (Top-Center)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* 🌌 TRANSPARENT / BORDERLESS TIMER SETTINGS & STYLES (NEW 🔥) */}
+                      <div className="border-t border-zinc-800/60 pt-3.5 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-[11px] font-bold text-zinc-350 block">✨ พื้นหลังโปร่งใสไม่มีกรอบ (Transparent & Borderless)</span>
+                            <span className="text-[10px] text-zinc-550 block">แสดงเฉพาะตัวเลขนาฬิกาเปล่าๆ เหมาะสำหรับเอาไปซ้อนบนหน้าจอ OBS โดยไม่มีกรอบด่างสีดำ</span>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => setSettings(prev => ({ ...prev, timerOnlyNumbers: !prev.timerOnlyNumbers }))}
+                            className={`w-9 h-5 rounded-none flex items-center p-0.5 cursor-pointer transition-colors ${
+                              settings.timerOnlyNumbers ? 'bg-cyan-500 justify-end' : 'bg-zinc-800 justify-start'
+                            }`}
+                          >
+                            <span className="w-4 h-4 bg-white" />
+                          </button>
+                        </div>
+
+                        {settings.timerOnlyNumbers && (
+                          <div className="space-y-3 bg-zinc-950/60 p-3 border border-zinc-850 rounded">
+                            {/* Color Glow Selector Grid */}
+                            <div className="space-y-1.5">
+                              <span className="text-[11px] text-zinc-400 font-bold block">🎨 สไตล์สีเรืองแสงและมิติแสงเงา 3D (Text Glow Style):</span>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {[
+                                  { id: 'cyan', label: '🩵 ฟ้าไซเบอร์เรืองแสง (Cyber Glow)' },
+                                  { id: 'pink', label: '🩷 ชมพูนีออนส้ม (Hot Neon Glow)' },
+                                  { id: 'orange-gold', label: '💛 ทองส้มลุกโชน (Flame Gold)' },
+                                  { id: 'white-3d', label: '🤍 ขาว 3D ขอบดำหนา (Classic 3D Projection)' },
+                                  { id: 'green-matrix', label: '💚 เขียวแมทริกซ์คอม (Retro Terminal)' },
+                                  { id: 'neon-purple', label: '💜 ม่วงหรูหรานีออน (Neon Purple)' }
+                                ].map((col) => (
+                                  <button
+                                    key={col.id}
+                                    type="button"
+                                    onClick={() => setSettings(prev => ({ ...prev, timerGlowColor: col.id as any }))}
+                                    className={`p-2 text-left text-[11px] font-bold border transition-all cursor-pointer ${
+                                      settings.timerGlowColor === col.id 
+                                        ? 'border-cyan-500 bg-cyan-950/20 text-white' 
+                                        : 'border-zinc-850 hover:border-zinc-800 bg-zinc-900/40 text-zinc-400'
+                                    }`}
+                                  >
+                                    {col.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Font Size Selector Slider */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[11px] text-zinc-400 font-bold block">🔎 ขนาดตัวเลขนาฬิกา (Font Size on Stream):</span>
+                                <span className="text-[11px] font-mono font-bold text-cyan-400 bg-cyan-950 px-1.5 py-0.5">{settings.timerFontSize || 48}px</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="24"
+                                max="150"
+                                value={settings.timerFontSize || 48}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  setSettings(prev => ({ ...prev, timerFontSize: val }));
+                                }}
+                                className="w-full accent-cyan-500 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -654,6 +1355,10 @@ export default function DashboardView() {
                   <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">เลือกรูปแบบธีมแสดงข้อความบนหน้าจอ (Overlay)</label>
                   <div className="grid grid-cols-2 gap-3">
                     {[
+                      { id: 'cosmic-nebula', label: '🌠 กาแล็กซีเวกัส 3D (Nebula)', desc: 'แผงไล่เฉดโฮโลสเปซโทนม่วง-ชมพู มีชั้นมิติลึกล้ำพร้อมขอบเรืองแสงออร่าพิเศษ' },
+                      { id: 'luxury-obsidian', label: '💎 ออบซิเดียนกรอบทองมีมิติ (3D Obsidian)', desc: 'บล็อกหินออนิกซ์ดำเงาตัดขอบกรอบทองคำ มีขอบนูน Bevel และเงาทอดลึกสะดุดตาเป็นประกาย' },
+                      { id: 'futuristic-holo', label: '🦾 โฮโลแกรมโต้ตอบ 3D (Hologram)', desc: 'กรอบอินเตอร์เฟซมุมเฉียงเอียงมีเหลี่ยมสีฟ้าคอนทราสต์ไฮเทค สะท้อนแสงเงาดิจิตอล' },
+                      { id: 'vintage-journal', label: '📜 บันทึกสเก็ตช์ 3D (Stacked Paper)', desc: 'สัมผัสกระดาษหนาสไตล์หนังสือโบราณ วางเอียงซ้อนกันเล็กน้อยให้เห็นชั้นเงาธรรมชาติสุดนุ่มนวล' },
                       { id: 'geometric', label: 'สมมาตรทรงเรขาคณิต', desc: 'ดีไซน์แผงมุมเหลี่ยมขอบเฉี่ยว, พัฒนาแนวยานยนต์ไฮเทค' },
                       { id: 'cyberpunk', label: 'นีออนไซเบอร์พังก์', desc: 'โทนสีชมพูนีออนสลับคู่ขอบสว่างสดใสเด่นชัด' },
                       { id: 'glassmorphism', label: 'กระจกฝ้าหรูหรา', desc: 'หน้าต่างกล่องแชทโปร่งใสมีเอฟเฟกต์เบลอหลัง' },
@@ -687,6 +1392,90 @@ export default function DashboardView() {
                     ))}
                   </div>
                 </div>
+
+                {/* GLASS TYPE SELECTOR SECTION (NEW 🔥) */}
+                <div className="space-y-2.5 pt-5 border-t border-zinc-900">
+                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono flex items-center gap-1.5">
+                    <Heart className="w-3.5 h-3.5 text-rose-500 animate-pulse" /> เลือกประเภทของภาชนะแก้ว / ขวดโหลเก็บสะสมแต้มหัวใจ (Glass Type)
+                  </label>
+                  <p className="text-[11px] text-zinc-500 leading-normal">
+                    ปรับประเภทของแก้วเครื่องเล่นพิเศษใน OBS ลิงก์ที่ 6 หัวใจที่กดจะหล่นลงไปกองสะสมและเด้งตอบสนองแบบ 3D Physics!
+                  </p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {[
+                      { id: 'beer', label: '🍺 เหยือกเบียร์', color: 'text-amber-500' },
+                      { id: 'wine', label: '🍷 แก้วไวน์', color: 'text-rose-500' },
+                      { id: 'cocktail', label: '🍸 แก้วค็อกเทล', color: 'text-pink-500' },
+                      { id: 'beaker', label: '🧪 บีกเกอร์', color: 'text-cyan-500' },
+                      { id: 'wish-jar', label: '🏺 ขวดโหลโชคดี', color: 'text-violet-500' }
+                    ].map(g => (
+                      <button 
+                        key={g.id}
+                        onClick={() => {
+                          setSettings(prev => ({ ...prev, glassType: g.id as any }));
+                        }}
+                        className={`p-2 border text-center flex flex-col items-center justify-center transition-all rounded-none cursor-pointer ${
+                          (settings.glassType || 'beer') === g.id 
+                            ? 'border-rose-500 bg-rose-950/20' 
+                            : 'border-zinc-850 hover:border-zinc-800 bg-zinc-900/30'
+                        }`}
+                        id={`glass-btn-${g.id}`}
+                      >
+                        <span className={`text-[11px] font-mono font-bold whitespace-nowrap overflow-hidden text-ellipsis w-full ${g.color}`}>{g.label}</span>
+                        <span className={`w-1.5 h-1.5 mt-2.5 rounded-full ${(settings.glassType || 'beer') === g.id ? 'bg-rose-500 animate-pulse' : 'bg-transparent'}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 🌟 CUSTOM FONT SELECTOR SECTOR (NEW 🔥) */}
+                <div className="space-y-3 pt-5 border-t border-zinc-900">
+                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono flex items-center gap-1.5">
+                    ✨ เลือกแบบฟอนต์ภาษาไทย & อังกฤษสวยๆ สำหรับข้อความเวทีและเวลา (Custom Fonts)
+                  </label>
+                  <p className="text-[11px] text-zinc-500 leading-normal">
+                    เปลี่ยนสไตล์ตัวอักษรของชื่อผู้พิมพ์ ข้อความแชท และตัวจับเวลาบน OBS Overlay ได้ทันทีด้วย Google Fonts ยอดนิยมที่มีสไตล์โดดเด่นหลากหลายสายสตรีม
+                  </p>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {[
+                      { id: 'Prompt', label: 'Prompt (โมเดิร์นคลีน)', style: "font-family: 'Prompt'" },
+                      { id: 'Kanit', label: 'Kanit (สปอร์ตโฉบเฉี่ยว)', style: "font-family: 'Kanit'" },
+                      { id: 'Itim', label: 'Itim (ลายมือน่ารักตัวกลม)', style: "font-family: 'Itim'" },
+                      { id: 'Chakra Petch', label: 'Chakra Petch (ไซเบอร์ไฮเทค)', style: "font-family: 'Chakra Petch'" },
+                      { id: 'Mitr', label: 'Mitr (กลมมนเป็นมิตร)', style: "font-family: 'Mitr'" },
+                      { id: 'Mali', label: 'Mali (น่ารักสไตล์คุ้กกี้)', style: "font-family: 'Mali'" }
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setSettings(prev => ({ ...prev, fontFamily: f.id }))}
+                        className={`p-3 border text-left flex flex-col justify-between transition-all rounded-none cursor-pointer ${
+                          settings.fontFamily === f.id 
+                            ? 'border-indigo-500 bg-indigo-950/25 ring-1 ring-indigo-500/20' 
+                            : 'border-zinc-850 hover:border-zinc-800 bg-zinc-900/30'
+                        }`}
+                        id={`font-family-btn-${f.id.replace(/\s+/g, '-')}`}
+                      >
+                        <span className="text-xs font-bold text-zinc-200" style={{ fontFamily: f.id }}>{f.id} Theme</span>
+                        <span className="text-[10px] text-zinc-500 mt-1" style={{ fontFamily: f.id }}>
+                          สวัสดีแชททีวี ยินดีต้อนรับ!
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="pt-2 flex items-center gap-3">
+                    <span className="text-xs text-zinc-400 font-mono font-bold whitespace-nowrap">ระบุชื่อ Google Font อื่นๆ ได้ด้วยตนเอง:</span>
+                    <input 
+                      type="text" 
+                      value={settings.fontFamily || ''}
+                      onChange={e => setSettings(prev => ({ ...prev, fontFamily: e.target.value }))}
+                      placeholder="เช่น Sarabun, Charm, Sriracha, Mitr"
+                      className="flex-1 bg-zinc-950 border border-zinc-850 rounded px-2.5 py-1 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
@@ -700,6 +1489,32 @@ export default function DashboardView() {
                   <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
                     เพิ่มความน่ารักให้หน้าจอไลฟ์สตรีมของคุณ! ตัวละครจะเดินไปมารอบๆ ฝั่งล่างของจอ และเมื่อมีคนพิมพ์แชทเข้ามาในไลฟ์ จะมีฟองคำพูดแชทลอยอยู่บนหัวตัวละครอวตารผู้พิมพ์นั้นทันที!
                   </p>
+                </div>
+
+                {/* Master Switcher for Stream Avatars */}
+                <div className="p-4 bg-zinc-900/40 border border-zinc-850 space-y-4 rounded-none">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <Users className="w-4 h-4 text-pink-400" />
+                      <div>
+                        <h4 className="text-xs font-bold font-mono text-zinc-200 uppercase tracking-wide">
+                          เปิด/ปิดใช้งานระบบแสดงตลับละครอวตารเดิน (Enable Stream Avatars Stage)
+                        </h4>
+                        <p className="text-[10px] text-zinc-500 font-sans mt-0.5 leading-snug">
+                          เปิดใช้งานเพื่อแสดงตัวละครอวตารเดินสัญจรไปมา หากปิดระบบนี้ ตัวละครอวตารทั้งหมดจะไม่ปรากฏขึ้นเลยบนหน้าจอหลัก ไม่ว่าในสถานการณ์ใดๆ
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setSettings(prev => ({ ...prev, showWalkingAvatars: prev.showWalkingAvatars === false ? true : false }))}
+                      className={`w-10 h-5.5 rounded-none flex items-center p-1 cursor-pointer transition-colors shrink-0 ${
+                        (settings.showWalkingAvatars !== false) ? 'bg-pink-500 justify-end' : 'bg-zinc-800 justify-start'
+                      }`}
+                      id="toggle-master-walking-avatars-btn"
+                    >
+                      <span className="w-3.5 h-3.5 bg-white" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Vector Avatar Movement Speed Settings Option */}
@@ -792,6 +1607,50 @@ export default function DashboardView() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Spawn only on activity settings option */}
+                <div className="p-4 bg-zinc-900/40 border border-zinc-850 space-y-4 rounded-none">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-pink-400" />
+                      <div>
+                        <h4 className="text-xs font-bold font-mono text-zinc-200 uppercase tracking-wide">
+                          ระบบอวตารปรากฏตัวเมื่อพิมพ์แชทเท่านั้น (Spawn On-Demand Overlay)
+                        </h4>
+                        <p className="text-[10px] text-zinc-500 font-sans mt-0.5 leading-snug">
+                          เมื่อเปิดใช้งาน ตัวละครอวตารจะไม่เดินอยู่ตลอดเวลาตั้งแต่เริ่มแรก แต่จะสลับมาปรากฏตัวเพิ่มขึ้นทีละตัวเมื่อเจ้าตัวพิมพ์ข้อความจำลองหรือใช้งานจริงเท่านั้น ส่วนถ้าปิดระบบนี้ ตัวละครหลักทั้งหมดจะออกมาเดินเล่นตั้งแต่เริ่มแรกเลย
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setSettings(prev => ({ ...prev, spawnOnlyOnActivity: !prev.spawnOnlyOnActivity }))}
+                      className={`w-10 h-5.5 rounded-none flex items-center p-1 cursor-pointer transition-colors ${
+                        (settings.spawnOnlyOnActivity ?? true) ? 'bg-pink-500 justify-end' : 'bg-zinc-800 justify-start'
+                      }`}
+                    >
+                      <span className="w-3.5 h-3.5 bg-white" />
+                    </button>
+                  </div>
+
+                  {/* Visitor limits adjustment slider */}
+                  <div className="border-t border-zinc-850/60 pt-3.5 space-y-2">
+                    <div className="flex justify-between items-center text-[11px] font-mono font-bold">
+                      <span className="text-zinc-300">จำนวนตัวละครผู้ชม/จำลองที่แสดงพร้อมกันสูงสุดบนจอ</span>
+                      <span className="text-pink-400 font-bold bg-pink-950/40 px-1.5 py-0.5 border border-pink-900/10 text-xs">{settings.maxVisitorAvatars ?? 1} ตัว</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="1" 
+                      max="10" 
+                      value={settings.maxVisitorAvatars ?? 1}
+                      onChange={e => setSettings(prev => ({ ...prev, maxVisitorAvatars: Number(e.target.value) }))}
+                      className="w-full h-1 accent-pink-500 bg-zinc-850 rounded-none appearance-none cursor-pointer"
+                    />
+                    <p className="text-[10px] text-zinc-500 leading-normal font-sans">
+                      กรณีที่มีผู้ชมพิมพ์แชทหรือกดส่งหัวใจหลายคนในเวลาไล่เลี่ยกัน ตัวละครผู้ชมเดิมจะเดินออกจากสกรีนและถูกเปลี่ยนเป็นข้อความของตัวละครใหม่ล่าสุดแทน เพื่อไม่ให้สกรีนซ้อนสะสมกันมากเกินไป (แนะนำตั้งไว้ที่ 1 ตัว เพื่อให้วิ่งปรากฏตัวทีละตัวตามตัวอย่าง)
+                    </p>
+                  </div>
                 </div>
 
                 {/* Auto-Hide when no viewers settings option */}
@@ -1186,6 +2045,159 @@ export default function DashboardView() {
                           id="tts-pitch-slider"
                         />
                       </div>
+
+                      {/* Select Speech Engine */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex justify-between items-center text-[10.5px] font-mono text-zinc-400 leading-none">
+                          <span>ระบุระบบประมวลผลเสียง (Speech Engine / Voice Server)</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSettings(prev => ({ ...prev, ttsEngine: 'google' }))}
+                            className={`px-3 py-2 text-xs font-mono border flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
+                              settings.ttsEngine === 'google' || !settings.ttsEngine
+                                ? 'bg-indigo-950/40 border-indigo-500 text-indigo-300 ring-1 ring-indigo-500'
+                                : 'bg-[#18181b] border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                            }`}
+                          >
+                            <span className="font-bold flex items-center gap-1 text-[11px]">☁️ Google Cloud (เสียงไทยแท้)</span>
+                            <span className="text-[9px] text-zinc-500 mt-0.5 leading-tight">แม่นยำ 100% เล่นได้ทุกเครื่องโดยไม่ต้องติดตั้งเพิ่ม</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSettings(prev => ({ ...prev, ttsEngine: 'browser' }))}
+                            className={`px-3 py-2 text-xs font-mono border flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
+                              settings.ttsEngine === 'browser'
+                                ? 'bg-indigo-950/40 border-indigo-500 text-indigo-300 ring-1 ring-indigo-500'
+                                : 'bg-[#18181b] border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                            }`}
+                          >
+                            <span className="font-bold flex items-center gap-1 text-[11px]">🖥️ Browser Web Synthesis</span>
+                            <span className="text-[9px] text-zinc-500 mt-0.5 leading-tight">สังเคราะห์ด้วยกำลังเครื่อง และเสียงที่มีในเครื่อง</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Select Voice selector (only visible/relevant if Web TTS is selected) */}
+                      {settings.ttsEngine === 'browser' ? (
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex justify-between items-center text-[10.5px] font-mono text-zinc-400 leading-none">
+                            <span>คัดเลือกระบบเสียงสังเคราะห์ (Voice Player)</span>
+                            <span className="text-[9px] text-emerald-400 bg-emerald-950/40 px-1 py-0.2 border border-emerald-900/10 uppercase">
+                              {voices.filter(v => v.lang.startsWith('th')).length} ค้นพบเสียงไทย
+                            </span>
+                          </div>
+                          <select
+                            value={settings.ttsVoiceName || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setSettings(prev => ({ ...prev, ttsVoiceName: val || undefined }));
+                            }}
+                            className="w-full bg-[#18181b] border border-zinc-800 rounded-none px-2 py-1.5 text-xs text-white font-mono leading-tight focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="">[เสียงคัดเลือกภาษาเบราว์เซอร์อัตโนมัติ]</option>
+                            {/* Thai voices first */}
+                            <optgroup label="เสียงวรรณยุกต์ภาษาไทย (Thai Speech Systems)">
+                              {voices.filter(v => v.lang.startsWith('th') || v.lang.includes('th-')).map(v => (
+                                <option key={v.name} value={v.name}>
+                                  🇹🇭 {v.name} ({v.lang})
+                                </option>
+                              ))}
+                              {voices.filter(v => v.lang.startsWith('th') || v.lang.includes('th-')).length === 0 && (
+                                <option disabled className="text-zinc-550 italic">ไม่พบตัวขับขี่เสียงอื่นๆ (ระบุมาตรฐาน th-TH)</option>
+                              )}
+                            </optgroup>
+                            {/* Other languages */}
+                            <optgroup label="เสียงระบบในภาษาอื่นๆ (All other system voices)">
+                              {voices.filter(v => !v.lang.startsWith('th') && !v.lang.includes('th-')).map(v => (
+                                <option key={v.name} value={v.name}>
+                                  {v.lang.startsWith('en') ? '🇺🇸' : '🌐'} {v.name} ({v.lang})
+                                </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                          <p className="text-[10px] text-zinc-500 leading-snug">
+                            *รองรับเสียงสังเคราะห์ภาษาไทยเต็มรูปแบบผ่าน Chrome, Edge, Safari และ iOS/Android โดยค่าเริ่มต้นของระบบจะใช้โมเดลเสียงที่ดีที่สุดของเบราว์เซอร์คุณโดยตรง
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-2.5 bg-indigo-950/10 border border-indigo-900/20 rounded-none text-[10.5px] text-zinc-400 font-mono leading-relaxed space-y-1">
+                          <p className="text-indigo-400 font-bold">✨ กำลังใช้: Google Cloud High Quality Web TTS Engine</p>
+                          <p>
+                            ระบบจะเลือกประมวลผลคำแปลและออกเสียงภาษาไทยที่ถูกต้อง เป็นธรรมชาติ ไหลลื่นที่สุดโดยอัตโนมัติ 
+                            แก้ปัญหาสำหรับเครื่องคอมพิวเตอร์ แท็บเล็ต หรือสมาร์ทโฟนที่เบราว์เซอร์ไม่มีโปรแกรมอ่านเสียงภาษาไทยติดตั้งไว้ล่วงหน้า
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Detailed Read/Speak Events Selection */}
+                      <div className="space-y-2 pt-3 border-t border-zinc-800/60 mt-2">
+                        <div className="text-[10.5px] font-mono text-zinc-400 leading-none">
+                          <span>ตั้งค่าการออกเสียงรายกิจกรรม (Speak Event Filtering)</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+                          {/* Speak Chats Toggle */}
+                          <label className="flex items-center gap-2 bg-[#18181b]/60 border border-zinc-800/80 px-2 py-1.5 cursor-pointer hover:border-zinc-700/80 transition-colors select-none">
+                            <input 
+                              type="checkbox"
+                              checked={settings.ttsReadChat !== false}
+                              onChange={e => setSettings(prev => ({ ...prev, ttsReadChat: e.target.checked }))}
+                              className="accent-indigo-500 rounded-none w-3.5 h-3.5"
+                            />
+                            <span className="text-zinc-300">💬 อ่านข้อความแชท</span>
+                          </label>
+
+                          {/* Speak Gifts Toggle */}
+                          <label className="flex items-center gap-2 bg-[#18181b]/60 border border-zinc-800/80 px-2 py-1.5 cursor-pointer hover:border-zinc-700/80 transition-colors select-none">
+                            <input 
+                              type="checkbox"
+                              checked={settings.ttsReadGift !== false}
+                              onChange={e => setSettings(prev => ({ ...prev, ttsReadGift: e.target.checked }))}
+                              className="accent-indigo-500 rounded-none w-3.5 h-3.5"
+                            />
+                            <span className="text-zinc-300">🎁 อ่านเมื่อส่งของขวัญ</span>
+                          </label>
+
+                          {/* Speak Follows Toggle */}
+                          <label className="flex items-center gap-2 bg-[#18181b]/60 border border-zinc-800/80 px-2 py-1.5 cursor-pointer hover:border-zinc-700/80 transition-colors select-none">
+                            <input 
+                              type="checkbox"
+                              checked={settings.ttsReadFollow !== false}
+                              onChange={e => setSettings(prev => ({ ...prev, ttsReadFollow: e.target.checked }))}
+                              className="accent-indigo-500 rounded-none w-3.5 h-3.5"
+                            />
+                            <span className="text-zinc-300">➕ อ่านเมื่อมีคนติดตาม</span>
+                          </label>
+
+                          {/* Speak Images Toggle */}
+                          <label className="flex items-center gap-2 bg-[#18181b]/60 border border-zinc-800/80 px-2 py-1.5 cursor-pointer hover:border-zinc-700/80 transition-colors select-none">
+                            <input 
+                              type="checkbox"
+                              checked={settings.ttsReadShareImage !== false}
+                              onChange={e => setSettings(prev => ({ ...prev, ttsReadShareImage: e.target.checked }))}
+                              className="accent-indigo-500 rounded-none w-3.5 h-3.5"
+                            />
+                            <span className="text-zinc-300">🖼️ อ่านเมื่อส่งรูปภาพ</span>
+                          </label>
+                        </div>
+
+                        {/* Skip Nickname Option */}
+                        <div className="pt-1.5">
+                          <label className="flex items-center justify-between bg-indigo-950/20 border border-indigo-900/30 px-3 py-2 cursor-pointer hover:bg-indigo-950/30 transition-colors select-none">
+                            <span className="flex flex-col">
+                              <span className="text-xs font-bold text-indigo-300 font-mono">🔇 ข้ามการอ่านชื่อผู้ส่ง</span>
+                              <span className="text-[9.5px] text-zinc-500 leading-tight">ข้ามคำนำหน้า "[ชื่อผู้สตรีม] กล่าวว่า" เพื่อความกระชับรวดเร็วในการสตรีม</span>
+                            </span>
+                            <input 
+                              type="checkbox"
+                              checked={settings.ttsSkipNickname === true}
+                              onChange={e => setSettings(prev => ({ ...prev, ttsSkipNickname: e.target.checked }))}
+                              className="accent-indigo-500 rounded-none w-4 h-4 ml-2"
+                            />
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1413,6 +2425,60 @@ export default function DashboardView() {
               </div>
             </div>
 
+            {/* Link 6: Falling Hearts into selectable Cup */}
+            <div className="pt-2 border-t border-zinc-900/60 font-mono text-[10.5px]">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-rose-500 font-mono flex items-center gap-1.5 mb-1">
+                <Heart className="w-3.5 h-3.5 text-rose-500 animate-pulse" /> OBS ลิงก์ที่ 6: แก้วเก็บสะสมแต้มหัวใจ (NEW 🔥)
+              </h4>
+              <p className="text-[9.5px] text-zinc-500 font-mono uppercase mb-1.5">
+                Hearts into interactive Cup: selected cups gather hearts when viewers click Like!
+              </p>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-none p-2 flex items-center justify-between gap-2 overflow-hidden font-mono">
+                <span className="text-zinc-440 truncate flex-1 min-w-0 pr-2 pb-0.5">
+                  {heartsGlassOverlayUrl}
+                </span>
+                <button 
+                  onClick={copyHeartsToClipboard}
+                  className={`py-1 px-2.5 rounded-none text-[11px] font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
+                    copiedHearts 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-rose-600 hover:bg-rose-500 text-white shadow-sm'
+                  }`}
+                  id="copy-hearts-overlay-btn"
+                >
+                  {copiedHearts ? <Check className="w-3 h-3" /> : <Clipboard className="w-3 h-3" />}
+                  {copiedHearts ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            {/* Link 7: Countdown Timer ONLY */}
+            <div className="pt-2 border-t border-zinc-900/60 font-mono text-[10.5px]">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 font-mono flex items-center gap-1.5 mb-1">
+                <Clock className="w-3.5 h-3.5 text-cyan-400 animate-pulse" /> OBS ลิงก์ที่ 7: ตัวจับเวลาถอยหลังอย่างเดียว (NEW ⏱️)
+              </h4>
+              <p className="text-[9.5px] text-zinc-500 font-mono uppercase mb-1.5">
+                Stream Timer Only: Clean styled stream counter without chat list or alerts
+              </p>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-none p-2 flex items-center justify-between gap-2 overflow-hidden font-mono">
+                <span className="text-zinc-440 truncate flex-1 min-w-0 pr-2 pb-0.5">
+                  {timerOnlyOverlayUrl}
+                </span>
+                <button 
+                  onClick={copyTimerToClipboard}
+                  className={`py-1 px-2.5 rounded-none text-[11px] font-bold font-mono uppercase tracking-wider flex items-center gap-1 flex-shrink-0 transition-all ${
+                    copiedTimer 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-sm'
+                  }`}
+                  id="copy-timer-overlay-btn"
+                >
+                  {copiedTimer ? <Check className="w-3 h-3" /> : <Clipboard className="w-3 h-3" />}
+                  {copiedTimer ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
             <p className="text-[9.5px] text-zinc-650 font-mono text-center leading-normal uppercase pt-1 border-t border-zinc-900">
               Add any link as browser sources inside OBS to separate and layout elements!
             </p>
@@ -1420,11 +2486,14 @@ export default function DashboardView() {
         </section>
 
         {/* Center column live streaming simulator preview background (Span 5) */}
-        <section className="xl:col-span-5 flex flex-col bg-[#0c0c0e] xl:h-full min-h-[550px] overflow-hidden border-r border-zinc-900">
+        <section className="xl:col-span-5 flex flex-col bg-[#0c0c0e] xl:h-full min-h-[550px] overflow-hidden border-r border-zinc-900 animate-fade-in">
           <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-900 flex justify-between items-center shrink-0">
             <div className="flex items-center gap-2">
-              <Eye className="w-4 h-4 text-indigo-400" />
-              <h2 className="text-xs font-bold tracking-widest text-[#e2e2e7] uppercase font-mono">Real-time Stream Preview</h2>
+              <Eye className="w-4 h-4 text-cyan-400 animate-pulse" />
+              <h2 className="text-xs font-bold tracking-widest text-[#e2e2e7] uppercase font-mono flex items-center gap-2">
+                Real-time Stream Preview 
+                <span className="text-[9.5px] bg-cyan-950/80 text-cyan-400 border border-cyan-500/30 px-1.5 py-0.5 rounded-none font-bold uppercase tracking-tight">{settings.mode}</span>
+              </h2>
             </div>
             
             {/* Viewport backgrounds changer */}
@@ -1460,8 +2529,8 @@ export default function DashboardView() {
             </div>
           </div>
 
-          {/* Preview canvas wrapping simulator container */}
-          <div className="flex-1 relative overflow-hidden flex items-center justify-center p-4">
+          {/* Compact Viewport Frame (takes 210px height instead of flex-1 to leave space for categories and cards) */}
+          <div className="h-[210px] shrink-0 relative overflow-hidden flex items-center justify-center p-3.5 bg-black/80">
             {/* Custom backdrops */}
             {backgroundType === 'checkerboard' && (
               <div 
@@ -1480,36 +2549,177 @@ export default function DashboardView() {
             
             {backgroundType === 'game' && (
               <div className="absolute inset-0 overflow-hidden bg-slate-950">
-                <div className="absolute inset-0 opacity-40 bg-[linear-gradient(rgba(18,16,16,0)_50%,_rgba(0,0,0,0.25)_50%),_linear-gradient(90deg,_rgba(255,0,0,0.06),_rgba(0,255,0,0.02),_rgba(0,0,255,0.06))] bg-[size:100%_4px,_6px_100%]" />
+                <div className="absolute inset-0 opacity-45 bg-[linear-gradient(rgba(18,16,16,0)_50%,_rgba(0,0,0,0.25)_50%),_linear-gradient(90deg,_rgba(255,0,0,0.06),_rgba(0,255,0,0.02),_rgba(0,0,255,0.06))] bg-[size:100%_4px,_6px_100%]" />
                 {/* Simulated colorful cyberwave visualizer animation representing stream background */}
                 <div className="absolute inset-0 bg-gradient-to-b from-indigo-950 via-slate-950 to-indigo-950 animate-pulse duration-1000" />
                 <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-indigo-900/30 via-transparent to-transparent" />
                 
                 {/* Visual decorations for the simulated video game HUD */}
-                <div className="absolute top-4 right-4 pointer-events-none text-right font-mono text-[10px] text-slate-400/80 space-y-0.5">
+                <div className="absolute top-3 right-4 pointer-events-none text-right font-mono text-[9px] text-slate-400/80 space-y-0.5">
                   <p>FPS: <span className="text-[#00F0FF] font-semibold">60.00</span></p>
-                  <p>BITRATE: <span className="text-pink-500 font-semibold">6000 kbps</span></p>
-                  <p>ENCODER: NVENC H.264</p>
+                  <p>BITRATE: <span className="text-[#00F0FF] font-semibold">6000 kbps</span></p>
                 </div>
-                <div className="absolute top-4 left-4 pointer-events-none flex items-center gap-2 font-mono text-[11px] text-white/50">
-                  <div className="bg-red-500 h-2.5 w-2.5 rounded-full animate-ping shrink-0" />
-                  <span className="text-white font-bold text-xs tracking-wider">LIVE</span>
-                  <span className="text-slate-400">01:42:09</span>
+                <div className="absolute top-3 left-4 pointer-events-none flex items-center gap-2 font-mono text-[10px] text-white/50">
+                  <div className="bg-red-500 h-2 w-2 rounded-full animate-ping shrink-0" />
+                  <span className="text-white font-bold tracking-wider">LIVE</span>
                 </div>
               </div>
             )}
 
             {/* Simulated Live Viewport Overlay view container */}
-            <div className="relative w-full h-full max-h-[580px] bg-transparent border border-zinc-900 rounded-none flex flex-col justify-end p-4 overflow-hidden shadow-md">
-              {/* Load Overlay strictly in isDemo simulation mode, binding to user styles dynamically */}
+            <div className="relative w-full h-full bg-transparent border border-zinc-900/60 rounded-none flex flex-col justify-end p-2.5 overflow-hidden shadow-md">
+              {/* Load Overlay strictly in isDemo simulation mode */}
               <OverlayView 
-                settingsOverride={
-                  activeTab === 'avatars' 
-                    ? { ...settings, mode: 'avatars' } 
-                    : settings
-                } 
+                settingsOverride={settings} 
                 isDemo={true} 
               />
+            </div>
+          </div>
+
+          {/* =========================================================================
+              GORGEOUS CATEGORIZED OBS WIDGET CATALOGUE SECTION (MATCHES SCREENSHOT)
+              ========================================================================= */}
+          <div className="flex-1 border-t border-zinc-900 p-4 overflow-y-auto bg-zinc-950/30 flex flex-col space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <h3 className="text-xs font-extrabold uppercase tracking-wide text-zinc-200 flex items-center gap-1.5 font-mono">
+                  <Laptop className="w-4 h-4 text-cyan-400" /> หมวดหมู่วิดเจ็ตสตรีม OBS (Widgets Library)
+                </h3>
+                <p className="text-[10.5px] text-zinc-500 font-sans">
+                  เลือกพรีวิวจำลองบนหน้าจอ และกดคลิกคัดลอกลิงก์ Overlay ไปเพิ่มลงในเบราว์เซอร์ OBS ทันที
+                </p>
+              </div>
+            </div>
+
+            {/* Category selection selector */}
+            <div className="flex flex-wrap items-center gap-1.5 border-b border-zinc-900/60 pb-2.5">
+              {[
+                { id: 'all', label: '🔌 วิดเจ็ตทั้งหมด' },
+                { id: 'alerts', label: '🔔 กลุ่มแจ้งเตือนสตรีม' },
+                { id: 'stats', label: '📊 แท่งเป้าหมาย & ตารางทอง' },
+                { id: 'interactive', label: '🎮 บวกลบเวลามันส์ & อวตาร' }
+              ].map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id as any)}
+                  className={`px-2.5 py-1 text-[10.5px] font-sans font-extrabold transition-all duration-150 cursor-pointer ${
+                    selectedCategory === cat.id 
+                      ? 'bg-cyan-950/80 text-cyan-400 border border-cyan-500/40 shadow-inner' 
+                      : 'bg-zinc-900/60 text-zinc-400 hover:text-white border border-zinc-850'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* 8 Cards Grid matching photo */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-4">
+              {WIDGETS_LIST.filter(widget => selectedCategory === 'all' || widget.category === selectedCategory).map((widget) => {
+                const isSelected = settings.mode === widget.mode;
+                const widgetUrl = buildOverlayUrl(widget.mode as any);
+                const isCopied = copiedWidgetId === widget.id;
+                
+                // Helper to render icon matching icon_type
+                const renderWidgetIcon = () => {
+                  const props = { className: `w-4 h-4 text-${widget.color}-400` };
+                  if (widget.icon_type === 'bell') return <Bell {...props} className="w-4 h-4 text-blue-400" />;
+                  if (widget.icon_type === 'target') return <Target {...props} className="w-4 h-4 text-red-500" />;
+                  if (widget.icon_type === 'award') return <Award {...props} className="w-4 h-4 text-amber-500 animate-pulse" />;
+                  if (widget.icon_type === 'crown') return <Crown {...props} className="w-4 h-4 text-yellow-500 animate-bounce" />;
+                  if (widget.icon_type === 'clock') return <Clock {...props} className="w-4 h-4 text-purple-400" />;
+                  if (widget.icon_type === 'gift') return <Gift {...props} className="w-4 h-4 text-pink-400 animate-bounce" />;
+                  if (widget.icon_type === 'stopwatch') return <Clock {...props} className="w-4 h-4 text-cyan-400" />;
+                  return <Swords {...props} className="w-4 h-4 text-emerald-400 animate-pulse" />;
+                };
+
+                // Style configurations depending on selection status
+                const borderClass = isSelected 
+                  ? `border-cyan-500 bg-zinc-900/65 ring-1 ring-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.2)]` 
+                  : `border-zinc-900 bg-zinc-950/25 hover:border-zinc-850 hover:bg-zinc-900/10`;
+
+                return (
+                  <div
+                    key={widget.id}
+                    onClick={() => {
+                      setSettings(prev => ({ ...prev, mode: widget.mode as any }));
+                    }}
+                    className={`p-3 border rounded-xl flex flex-col justify-between gap-2.5 cursor-pointer transition-all ${borderClass}`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      {/* Round colorful circle container with glow icons */}
+                      <div className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center bg-zinc-900 border border-zinc-800 shadow">
+                        {renderWidgetIcon()}
+                      </div>
+                      
+                      <div className="space-y-0.5 leading-tight overflow-hidden">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-xs font-bold text-white font-sans">{widget.title_en}</h4>
+                          {widget.isNew && (
+                            <span className="text-[8px] tracking-wider uppercase font-mono font-black text-cyan-400 px-1 py-0.2 bg-cyan-950 border border-cyan-800/30 rounded-none animate-pulse">
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-zinc-400 font-sans leading-none">{widget.title_th}</p>
+                      </div>
+                    </div>
+
+                    <p className="text-[9.5px] text-zinc-500 font-sans tracking-tight leading-relaxed line-clamp-2">
+                      {widget.desc}
+                    </p>
+
+                    {/* Copy and Actions segment */}
+                    <div className="flex items-center gap-1.5 mt-0.5 pt-2 border-t border-zinc-900">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Copy hander
+                          navigator.clipboard.writeText(widgetUrl);
+                          setCopiedWidgetId(widget.id);
+                          setTimeout(() => {
+                            setCopiedWidgetId(null);
+                          }, 2500);
+                        }}
+                        className={`flex-grow py-1 px-2 rounded-none font-sans text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-pointer transition-all border ${
+                          isCopied
+                            ? 'bg-emerald-950/80 text-emerald-400 border-emerald-500/40'
+                            : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border-zinc-800'
+                        }`}
+                      >
+                        {isCopied ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400 animate-pulse" /> คัดลอกลิงก์สำเร็จ!
+                          </>
+                        ) : (
+                          <>
+                            <Clipboard className="w-3 h-3 text-cyan-400" /> คัดลอกลิงก์ OBS
+                          </>
+                        )}
+                      </button>
+                      
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Switch tabs on panel configurations for easier direct edit
+                          if (widget.mode === 'timer_only') {
+                            setActiveTab('general');
+                          } else if (widget.mode === 'avatars') {
+                            setActiveTab('avatars');
+                          } else if (widget.mode === 'chat_alerts' || widget.mode === 'chat_only' || widget.mode === 'alerts_only' || widget.mode === 'images_only' || widget.mode === 'hearts_glass') {
+                            setActiveTab('design');
+                          }
+                          setSettings(prev => ({ ...prev, mode: widget.mode as any }));
+                        }}
+                        className="py-1 px-2 bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 hover:border-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-none font-sans text-[10px] font-semibold cursor-pointer shrink-0 transition-all"
+                        title="ปรับแต่งสัญลักษณ์และตัวอักษรของวิดเจ็ตนี้"
+                      >
+                        ปรับแต่ง
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -1626,6 +2836,367 @@ export default function DashboardView() {
           </div>
         </section>
       </div>
+    ) : currentPage === 'history' ? (
+      /* DONATION HISTORY PAGE */
+      <div className="w-full h-full p-6 overflow-y-auto space-y-6 bg-[#07070a] font-sans pb-16">
+        
+        {/* Statistics Banner */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          {[
+            { title: 'ยอดสนับสนุนสะสมถอนได้', val: '฿15,250.00', desc: 'หักภาษี ณ ที่จ่ายเสร็จสิ้น', color: 'hover:border-[#7c3aed]/40' },
+            { title: 'จำนวนผู้สนับสนุนรวม', val: '148 ราย', desc: '+12 รายในสัปดาห์นี้', color: 'hover:border-cyan-500/40' },
+            { title: 'ของขวัญและป๊อปอัพ', val: '342 ครั้ง', desc: 'อัตราการป้อนข้อความ 98.2%', color: 'hover:border-pink-500/40' },
+            { title: 'ชั่วโมงที่ขึ้นสตรีมรวม', val: '48.5 ชม.', desc: 'ความเสถียรเชื่อมต่อยอดเยี่ยม', color: 'hover:border-emerald-500/40' }
+          ].map((stat, idx) => (
+            <div key={idx} className={`bg-[#0c0c11] border border-[#161622] rounded-2xl p-5 transition-all shadow-sm ${stat.color}`}>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">{stat.title}</span>
+              <span className="text-2xl font-black text-white font-mono mt-1.5 block tracking-wide">{stat.val}</span>
+              <span className="text-[10px] text-zinc-450 mt-1 block">{stat.desc}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Detailed logs table container */}
+        <div className="bg-[#0c0c11] border border-[#161622] rounded-2xl overflow-hidden shadow-md">
+          <div className="px-5 py-4 border-b border-[#14141d] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-[#0a0a0f]">
+            <div>
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">แผ่นรายงานการสนับสนุนล่าสุด</h3>
+              <p className="text-[11px] text-zinc-500 mt-1">ประมวลผลผ่านระบบ PromptPay, TrueMoney, และเครดิตการ์ดอย่างโปร่งใส</p>
+            </div>
+            
+            {/* Filter buttons */}
+            <div className="flex gap-2 bg-[#12121b] p-1 border border-[#1d1d2b] rounded-lg self-start">
+              <button className="px-3 py-1.5 bg-[#7c3aed] text-white text-[10px] font-bold rounded-md">
+                ทั้งหมด (7)
+              </button>
+              <button className="px-3 py-1.5 text-zinc-400 hover:text-white text-[10px] font-medium rounded-md transition-all">
+                เฉพาะเงินโดเนท
+              </button>
+              <button className="px-3 py-1.5 text-zinc-400 hover:text-white text-[10px] font-medium rounded-md transition-all">
+                เฉพาะของขวัญ
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-[#141420] text-[10px] text-zinc-500 font-bold uppercase tracking-wider bg-[#0a0a0f]/40">
+                  <th className="py-3 px-5">ผู้สนับสนุน</th>
+                  <th className="py-3 px-5">ประเภทกิจกรรม</th>
+                  <th className="py-3 px-5">ยอดเงิน / สิทธิพิเศษ</th>
+                  <th className="py-3 px-5">ข้อความความคิดเห็น</th>
+                  <th className="py-3 px-5 text-right">วันเวลาทำรายการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#13131e] text-xs">
+                {[
+                  { name: 'Art_Lover_99', type: 'โดเนท (PromptPay Th)', amount: '฿500.00 THB', msg: 'สตรีมสนุกมากครับ สู้ๆ พลูตู้แก้วสวยมาก! 🖼️✨', date: 'วันนี้, 23:10 น.', color: 'text-cyan-455 bg-cyan-950/40 border-cyan-800/30' },
+                  { name: 'Camera_Guy', type: 'ส่งของขวัญ มงกุฎ', amount: '฿350.00 THB', msg: 'ของขวัญพิเศษ แด่สุดยอดสตรีมเมอร์แห่งปี! 👑', date: 'วันนี้, 22:45 น.', color: 'text-amber-450 bg-amber-950/40 border-amber-800/30' },
+                  { name: 'Meme_Master', type: 'โดเนท (TrueMoney)', amount: '฿150.00 THB', msg: 'สตรีมเมอร์ครับ ตกใจเสียงแจ้งเตือนมาก ลั่นสตู ฮ่าๆๆ 😂', date: 'วันนี้, 22:15 น.', color: 'text-cyan-455 bg-cyan-950/40 border-cyan-800/30' },
+                  { name: 'NatureExplorer', type: 'ผู้ติดตามใหม่', amount: 'สมัครสมาชิกสตรีม', msg: 'กดปุ่ม Subscribe เพื่อสนับสนุนช่องอย่างภักดี ⛰️☀️', date: 'วันนี้, 21:50 น.', color: 'text-emerald-450 bg-emerald-950/40 border-emerald-800/30' },
+                  { name: 'PixelWizard', type: 'ส่งของขวัญ ไซเบอร์บอท', amount: '฿150.00 THB', msg: 'สนับสนุนคนไทยทำแอปเจ๋งๆ ลายแก้วเบียร์สวยจัด 🍺', date: 'วันนี้, 21:05 น.', color: 'text-amber-450 bg-amber-950/40 border-amber-800/30' },
+                  { name: 'CoolPhotoFan', type: 'แชร์สตรีมมิ่ง', amount: 'แชร์ให้เพื่อน 2 กลุ่ม', msg: 'แชร์ห้องสตรีมไปยังกลุ่มรักคอมพิวเตอร์และแกดเจ็ตเท่ๆ!', date: 'วันนี้, 20:30 น.', color: 'text-pink-450 bg-pink-950/40 border-pink-800/30' },
+                  { name: 'Princess_Zelda', type: 'โดเนท (TrueWallet)', amount: '฿1,200.00 THB', msg: 'โดเนทเป็นกำลังใจค่า ชอบอวตารน้องผีสีขาวเวฟมากเยยย 👻💕', date: 'เมื่อวาน, 18:14 น.', color: 'text-cyan-455 bg-cyan-950/40 border-cyan-800/30' }
+                ].map((item, idx) => (
+                  <tr key={idx} className="hover:bg-[#11111a]/40 transition-colors">
+                    <td className="py-3 px-5 font-bold text-white flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-zinc-900 border border-zinc-800 p-0.5">
+                        <img src={mockAvatarUrls[idx % mockAvatarUrls.length]} className="w-full h-full object-cover rounded-full" />
+                      </div>
+                      <span>{item.name}</span>
+                    </td>
+                    <td className="py-3 px-5">
+                      <span className={`px-2 py-0.5 text-[10px] font-bold border rounded-md ${item.color}`}>
+                        {item.type}
+                      </span>
+                    </td>
+                    <td className="py-3 px-5 font-mono font-bold text-white">{item.amount}</td>
+                    <td className="py-3 px-5 text-zinc-350 max-w-sm truncate">{item.msg}</td>
+                    <td className="py-3 px-5 text-right text-zinc-550 font-mono">{item.date}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    ) : currentPage === 'withdraw' ? (
+      /* WITHDRAW INCOME AND PAYMENTS PAGE */
+      <div className="w-full h-full p-6 overflow-y-auto space-y-6 bg-[#07070a] font-sans pb-16">
+        
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* Left panel - withdrawal form (Span 7) */}
+          <div className="lg:col-span-7 bg-[#0c0c11] border border-[#161622] rounded-2xl p-6 space-y-6">
+            <div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Gift className="w-4 h-4 text-[#7c3aed]" /> ขออนุมัติถอนยอดรายได้โฆษณาและโดเนท
+              </h3>
+              <p className="text-[11px] text-zinc-500 mt-1">
+                คุณสามารถเลือกวิธีการถอนโอน เข้าบัญชีธนาคารในไทยโดยตรง หรือพร้อมเพย์ด่วน ระบบประมวลผลด่วนสูงสุด
+              </p>
+            </div>
+
+            {withdrawSuccess ? (
+              <div className="bg-emerald-950/45 border border-emerald-500/30 p-5 rounded-xl space-y-3.5 animate-fade-in">
+                <div className="flex items-start gap-3">
+                  <div className="bg-emerald-500 text-black p-1.5 rounded-full mt-0.5 shadow-md">
+                    <Check className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-emerald-400 uppercase tracking-widest leading-none">บันทึกคำสั่งถอนยอดสำเร็จ!</h4>
+                    <span className="text-[10px] text-zinc-500 font-mono block mt-1 tracking-tight font-bold">หมายเลขอ้างอิงคิวธนาคาร: #WD-2026-9403</span>
+                    <p className="text-[11px] text-zinc-300 mt-2 leading-relaxed">
+                      คำสั่งถอนจำนวนเงิน <strong className="text-white font-extrabold font-mono">฿{Number(withdrawAmount).toLocaleString()} บาท</strong> โอนเข้าเบอร์พร้อมเพย์ <strong className="text-white font-bold">{withdrawPhone}</strong> ของคุณเสร็จสมบูรณ์เรียบร้อย ทางธนาคารแห่งประเทศไทยกำลังตรวจสอบสถานะการเงิน (ปกติจะเข้าบัญชีภายใน 5-10 นาที)
+                    </p>
+                  </div>
+                </div>
+                <div className="border-t border-emerald-900/30 pt-3 flex justify-end">
+                  <button 
+                    onClick={() => {
+                      setWithdrawSuccess(false);
+                      setWithdrawAmount('2500');
+                    }}
+                    className="bg-[#7c3aed] text-white hover:bg-[#6d28d9] font-semibold text-xs py-1.5 px-4 rounded-lg cursor-pointer"
+                  >
+                    ทำรายการใหม่อีกครั้ง
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                
+                {/* Method selector buttons */}
+                <div className="space-y-2">
+                  <label className="text-[10.5.px] text-zinc-400 font-bold uppercase tracking-wider font-mono">ช่องทางการรับเงิน (Payment Method)</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {[
+                      { id: 'promptpay', title: 'PromptPay', desc: 'วินาทีต่อวินาที', active: true },
+                      { id: 'kbank', title: 'กสิกรไทย', desc: 'KBANK สมาร์ท', active: false },
+                      { id: 'scb', title: 'ไทยพาณิชย์', desc: 'SCB อีซี่', active: false },
+                      { id: 'truewallet', title: 'TrueWallet', desc: 'ทรูวอลเล็ต', active: false }
+                    ].map(bank => (
+                      <button 
+                        key={bank.id}
+                        type="button"
+                        className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center cursor-pointer ${
+                          bank.id === 'promptpay' 
+                            ? 'border-[#7c3aed] bg-[#7c3aed]/5' 
+                            : 'border-[#1b1b2a] bg-[#09090c] hover:border-zinc-805'
+                        }`}
+                      >
+                        <span className="text-xs font-extrabold text-white">{bank.title}</span>
+                        <span className="text-[8.5px] text-zinc-500 mt-0.5">{bank.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Input Fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-zinc-500 font-bold uppercase font-mono">ชื่อ-นามสกุลเจ้าของบัญชี</label>
+                    <input 
+                      type="text" 
+                      defaultValue="ลันตา สตรีมเมอร์"
+                      className="w-full bg-[#111116] border border-[#1b1b2e] rounded-xl px-4 py-2.5 text-xs text-white"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-zinc-500 font-bold uppercase font-mono">หมายเลขพร้อมเพย์ / เบอร์โทรศัพท์</label>
+                    <input 
+                      type="text" 
+                      value={withdrawPhone}
+                      onChange={(e) => setWithdrawPhone(e.target.value)}
+                      className="w-full bg-[#111116] border border-[#1b1b2e] rounded-xl px-4 py-2.5 font-mono text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-zinc-500 font-bold uppercase font-mono flex justify-between">
+                    <span>ระบุมูลค่าเงินถอนออก (THB)</span>
+                    <span className="text-zinc-600">ยอดย้ายออกสูงสุด: ฿15,250.00</span>
+                  </label>
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      value={withdrawAmount}
+                      max="15250"
+                      onChange={(e) => setWithdrawAmount(e.target.value)}
+                      className="w-full bg-[#111116] border border-[#1b1b2e] rounded-xl pl-9 pr-4 py-2.5 font-mono font-bold text-sm text-cyan-400 focus:outline-none focus:border-[#7c3aed]"
+                    />
+                    <div className="absolute left-3.5 top-2.5 text-zinc-500 font-bold text-xs select-none">฿</div>
+                  </div>
+                </div>
+
+                {/* Quick select money pills */}
+                <div className="flex gap-1.5 flex-wrap">
+                  {['500', '1000', '2500', '5000', '15250'].map(val => (
+                    <button
+                      type="button"
+                      key={val}
+                      onClick={() => setWithdrawAmount(val)}
+                      className="py-1 px-3 bg-zinc-900 hover:bg-[#1c1c28] text-zinc-300 rounded text-[10px] font-mono hover:text-white border border-[#1c1c2b] cursor-pointer"
+                    >
+                      ฿{Number(val).toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Submit button wrapper */}
+                <div className="pt-3 border-t border-[#13131e]">
+                  <button
+                    onClick={() => {
+                      if (!withdrawAmount || Number(withdrawAmount) <= 0) return;
+                      setWithdrawSuccess(true);
+                    }}
+                    className="w-full py-3 bg-gradient-to-r from-[#7c3aed] to-blue-600 hover:from-[#6d28d9] hover:to-blue-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-[#7c3aed]/25 flex items-center justify-center gap-2 hover:translate-y-[-1px] transition-all cursor-pointer"
+                  >
+                    ส่งคำร้องอนุมัติการถอนเงิน <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+              </div>
+            )}
+          </div>
+
+          {/* Right panel - PromptPay dynamic QR indicator (Span 5) */}
+          <div className="lg:col-span-5 bg-[#0c0c11] border border-[#161622] rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-5">
+            <div className="bg-[#002f5a] text-white px-3.5 py-1.5 rounded-xl border border-cyan-400/40 text-[9px] font-mono leading-none tracking-widest font-extrabold uppercase">
+              Thai PromptPay Realtime
+            </div>
+            
+            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-md relative overflow-hidden flex flex-col items-center max-w-[240px]">
+              {/* Fake real QR template */}
+              <div className="flex justify-between w-full items-center mb-2 text-[10px] text-[#002f5a] font-extrabold font-mono">
+                <span>PROMPTPAY</span>
+                <span>QR CODE</span>
+              </div>
+              <div className="w-[180px] h-[180px] bg-sky-50 rounded-lg p-2 flex items-center justify-center border border-sky-100">
+                <svg viewBox="0 0 100 100" className="w-full h-full text-[#012d5e]">
+                  {/* Generate abstract SVG QR patterns that look like real deal! */}
+                  <rect x="0" y="0" width="22" height="22" fill="currentColor" />
+                  <rect x="2" y="2" width="18" height="18" fill="white" />
+                  <rect x="6" y="6" width="10" height="10" fill="currentColor" />
+                  
+                  <rect x="78" y="0" width="22" height="22" fill="currentColor" />
+                  <rect x="80" y="2" width="18" height="18" fill="white" />
+                  <rect x="84" y="6" width="10" height="10" fill="currentColor" />
+                  
+                  <rect x="0" y="78" width="22" height="22" fill="currentColor" />
+                  <rect x="2" y="80" width="18" height="18" fill="white" />
+                  <rect x="6" y="84" width="10" height="10" fill="currentColor" />
+                  
+                  {/* Miscellaneous noise squares */}
+                  <rect x="30" y="2" width="8" height="14" fill="currentColor" />
+                  <rect x="42" y="4" width="12" height="8" fill="currentColor" />
+                  <rect x="60" y="2" width="15" height="4" fill="currentColor" />
+                  <rect x="30" y="25" width="25" height="10" fill="currentColor" />
+                  <rect x="60" y="15" width="10" height="30" fill="currentColor" />
+                  <rect x="10" y="30" width="15" height="15" fill="currentColor" />
+                  <rect x="0" y="50" width="28" height="8" fill="currentColor" />
+                  <rect x="35" y="42" width="35" height="12" fill="currentColor" />
+                  <rect x="75" y="50" width="25" height="25" fill="currentColor" />
+                  <rect x="30" y="60" width="15" height="35" fill="currentColor" />
+                  <rect x="50" y="65" width="20" height="15" fill="currentColor" />
+                  <rect x="85" y="85" width="10" height="12" fill="currentColor" />
+                </svg>
+              </div>
+
+              {/* Amount output */}
+              <div className="mt-3 text-center">
+                <span className="text-[10px] text-zinc-500 font-bold block">โอนจ่ายโฆษณา/สนับสนุนด่วน</span>
+                <span className="text-xs font-black text-[#002f5a] font-mono block mt-0.5">
+                  ฿{Number(withdrawAmount || 0).toLocaleString()} THB
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 px-3">
+              <h4 className="text-[11px] font-extrabold text-zinc-200">สแกนรับโดเนทด่วนบนหน้าจอ (Dynamic QR)</h4>
+              <p className="text-[10px] text-zinc-500 leading-relaxed font-sans">
+                โค้ด PromptPay QR ด้านบนถูกผูกกับระบบธนาคารแบบอัตโนมัติ สตรีมเมอร์สามารถแคปรูปภาพหน้าจอ QR นี้ นำไปแปะประกอบในหน้าวิดเจ็ตดีไซเนอร์ หรือ OBS ได้ทันที ยอดเงินผู้ชมโอนจะเข้าบัญชีโดยตรงแบบไม่ต้องเชื่อมต่อ API เพิ่ม!
+              </p>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    ) : (
+      /* PLATFORM INTEGRATIONS PAGE */
+      <div className="w-full h-full p-6 overflow-y-auto space-y-6 bg-[#07070a] font-sans pb-16">
+        
+        <div className="bg-[#0c0c11] border border-[#161622] rounded-2xl p-6 space-y-4">
+          <div>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">แผงเชื่อมต่อเซิร์ฟเวอร์ไลฟ์สตรีม</h3>
+            <p className="text-[11px] text-zinc-500 mt-1">
+              เปิดการแจ้งเตือนเสียงและเอฟเฟกต์แชทอวตารแบบไร้รอยต่อผ่านช่องทางไลฟ์ยักษ์ใหญ่ สตรีมเมอร์สามารถเปิด API ซิงค์พร้อมกันได้
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[
+              { id: '1', title: 'TikTok Live Connector', slug: '@tiktok-stream-webhook', status: 'เชื่อมต่อแล้ว', active: true, color: 'border-emerald-500/20 bg-emerald-950/5' },
+              { id: '2', title: 'Twitch Alerts Gateway', slug: '@twitch-alert-websocket', status: 'เชื่อมต่อแล้ว', active: true, color: 'border-emerald-500/20 bg-emerald-950/5' },
+              { id: '3', title: 'YouTube Stream Webhook', slug: '@youtube-live-event-feed', status: 'ไม่ได้เชื่อมต่อ', active: false, color: 'border-[#1b1b2a] bg-[#09090c]' },
+              { id: '4', title: 'Facebook Gaming Events', slug: '@facebook-gaming-applet', status: 'ไม่ได้เชื่อมต่อ', active: false, color: 'border-[#1b1b2a] bg-[#09090c]' }
+            ].map(plat => (
+              <div key={plat.id} className={`p-4 border rounded-xl flex items-center justify-between transition-all ${plat.color}`}>
+                <div>
+                  <h4 className="text-xs font-bold text-white">{plat.title}</h4>
+                  <span className="text-[9.5px] text-zinc-500 font-mono block mt-0.5">{plat.slug}</span>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded ${
+                    plat.active ? 'bg-emerald-950 text-emerald-450 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-500'
+                  }`}>
+                    {plat.status}
+                  </span>
+                  <button className="text-xs bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-bold px-2.5 py-1 rounded-md cursor-pointer">
+                    {plat.active ? 'แก้ไข' : 'เชื่อมต่อ'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* API Credentials guidelines */}
+        <div className="bg-[#0c0c11] border border-[#161622] rounded-2xl p-6 space-y-4">
+          <div>
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider">คีย์ลับฝั่งนักพัฒนาสำหรับการรวม API (IndoFinity API Keys)</h4>
+            <p className="text-[11px] text-zinc-500 mt-1">ใช้โทเค็นนี้ร่วมกับโปรแกรมภายนอก เช่น Companion, Stream Deck, หรือโปรแกรมยิงเสียงทอยแจ็คพอตเพื่อควบคุม</p>
+          </div>
+          
+          <div className="bg-[#040406] border border-[#14141e] rounded-xl p-4 space-y-3 font-mono">
+            <div className="flex items-center justify-between text-xs pb-1.5 border-b border-[#12121e]">
+              <span className="text-zinc-500 text-[10px]">API_KEY_SANDBOX</span>
+              <span className="text-emerald-400 font-bold text-[10px]">active</span>
+            </div>
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-zinc-350 text-[10.5px] truncate max-w-lg font-bold">
+                indofinity_live_sk_89230578************103859d0a
+              </span>
+              <button 
+                onClick={() => alert('API Key Copied!')}
+                className="bg-zinc-900 border border-zinc-800 text-zinc-350 hover:bg-zinc-800 cursor-pointer hover:text-white px-2 py-1 text-[10px]"
+              >
+                คัดลอกคีย์
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    )}
+    
+        </div>
+      </main>
     </div>
   );
 }
