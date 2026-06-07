@@ -1370,9 +1370,8 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
       if (useGoogle) {
         const langCode = isThai ? 'th' : 'en';
-        // Optimize for Thai speakers by using google.co.th, otherwise google.com
-        const domain = isThai ? 'translate.google.co.th' : 'translate.google.com';
-        const clientSideUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}&total=1&idx=0&textlen=${text.length}&prev=input`;
+        const domain = 'translate.google.com';
+        const clientSideUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
         
         // Dynamically create audio element and set referrerpolicy="no-referrer" to strip the Referer header
         // This makes Google see it as a direct client request and bypasses the 403 Forbidden/CORS blocks

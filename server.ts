@@ -102,19 +102,31 @@ async function startServer() {
       }
 
       // Google Translate TTS URL
-      // Use client=tw-ob which is highly permissive on server side, localized translate.google.co.th for Thai
-      const domain = lang === 'th' ? 'translate.google.co.th' : 'translate.google.com';
-      const ttsUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}&total=1&idx=0&textlen=${text.length}&prev=input`;
+      // Use clean client=tw-ob on translate.google.com to bypass token validation
+      const domain = "translate.google.com";
+      const ttsUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
 
-      const response = await fetch(ttsUrl, {
+      let response = await fetch(ttsUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Referer": `https://${domain}/`
         }
       });
 
+      // Secondary fallback to client=gtx if client=tw-ob is blocked or rate-limited
       if (!response.ok) {
-        console.error("Google TTS response not OK:", response.status, response.statusText);
+        console.warn(`TTS proxy fallback: client=tw-ob returned status ${response.status}. Attempting client=gtx fallback...`);
+        const fallbackUrl = `https://${domain}/translate_tts?ie=UTF-8&tl=${lang}&client=gtx&q=${encodeURIComponent(text)}`;
+        response = await fetch(fallbackUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": `https://${domain}/`
+          }
+        });
+      }
+
+      if (!response.ok) {
+        console.error("Google TTS response not OK in both attempts:", response.status, response.statusText);
         res.status(response.status).json({ error: "Failed to fetch TTS from Google" });
         return;
       }
