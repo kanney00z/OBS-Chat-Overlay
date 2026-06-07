@@ -1374,33 +1374,56 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     audio.src = clientSideUrl;
     audio.playbackRate = settings.ttsVoiceRate || 1.0;
     
+    let clientAttemptHandled = false;
+    const triggerServerFallback = (errDetails: any) => {
+      if (clientAttemptHandled) return;
+      clientAttemptHandled = true;
+      
+      console.warn('Client-side Google TTS failed, attempting Server TTS proxy server fallback:', errDetails);
+      
+      const apiKeyParam = settings.ttsApiKey ? `&apiKey=${encodeURIComponent(settings.ttsApiKey)}` : '';
+      const serverSideUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}${apiKeyParam}`;
+      
+      const fallbackAudio = document.createElement('audio');
+      fallbackAudio.setAttribute('referrerpolicy', 'no-referrer');
+      fallbackAudio.src = serverSideUrl;
+      fallbackAudio.playbackRate = settings.ttsVoiceRate || 1.0;
+      
+      let serverAttemptHandled = false;
+      const triggerFinalFailover = (proxyErrDetails: any) => {
+        if (serverAttemptHandled) return;
+        serverAttemptHandled = true;
+        
+        console.error('Server-side Google TTS proxy failed or autoplay blocked:', proxyErrDetails);
+        if (!alreadyAttemptedBrowser) {
+          console.warn('Attempting Browser Web Speech Synthesis as final fallback.');
+          speakBrowserTTS(text, isThai, voices, true);
+        } else {
+          console.error('All TTS fallbacks failed. Terminal failover state to prevent infinite loops.');
+        }
+      };
+
+      // Guard fallback audio with both events and play promise catcher
+      fallbackAudio.onerror = (e) => triggerFinalFailover('Media error event fired');
+      fallbackAudio.onstalled = (e) => triggerFinalFailover('Media stalled event fired');
+      
+      fallbackAudio.play()
+        .then(() => {
+          console.log('Successfully completed playing server-side Google TTS proxy');
+        })
+        .catch(err => {
+          triggerFinalFailover(err);
+        });
+    };
+
+    // Guard client-side audio with both events and play promise catcher
+    audio.onerror = (e) => triggerServerFallback('Media error event fired');
     audio.play()
       .then(() => {
-        console.log('Successfully played client-side Google Translation TTS stream');
+        console.log('Successfully completed playing client-side Google Translation TTS stream');
       })
       .catch(err => {
-        console.warn('Client-side Google TTS failed (possibly blocked/autoplay-limit), falling back to Server TTS proxy:', err);
-        // 2. Fallback to Server Proxy
-        const apiKeyParam = settings.ttsApiKey ? `&apiKey=${encodeURIComponent(settings.ttsApiKey)}` : '';
-        const serverSideUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}${apiKeyParam}`;
-        
-        const fallbackAudio = document.createElement('audio');
-        fallbackAudio.setAttribute('referrerpolicy', 'no-referrer');
-        fallbackAudio.src = serverSideUrl;
-        fallbackAudio.playbackRate = settings.ttsVoiceRate || 1.0;
-        fallbackAudio.play()
-          .then(() => {
-            console.log('Successfully played server-side Google TTS proxy');
-          })
-          .catch(proxyErr => {
-            console.error('Server-side Google TTS proxy also failed. Autoplay might be blocked by the browser. (Note: Please click once on the OBS overlay screen to activate sound autoplay!)');
-            if (!alreadyAttemptedBrowser) {
-              console.warn('Falling back to Browser Web Speech Synthesis as last resort.');
-              speakBrowserTTS(text, isThai, voices, true);
-            } else {
-              console.error('All TTS fallbacks failed. No further attempts to prevent loops.');
-            }
-          });
+        triggerServerFallback(err);
       });
   };
 

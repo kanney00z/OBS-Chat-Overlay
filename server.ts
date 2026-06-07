@@ -159,36 +159,37 @@ async function startServer() {
         }
       }
 
-      // Attempt 1: Standard stable Google Translate client=tw-ob endpoint (domain: translate.google.com)
-      // Highly stable, handles automated query loads better without token/captcha blocks
-      const googleDomain = "translate.google.com";
-      const apiTtsUrl = `https://${googleDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
-
-      console.log(`TTS Request: "${text}" [lang=${lang}]. Attempting translate.google.com API...`);
+      // Attempt 1: Highly stable translate.googleapis.com with client=gtx
+      // This is Google's official extension endpoint. It is extremely resilient to cloud IP rate-limiting,
+      // especially when requested with standard/minimalist headers.
+      console.log(`TTS Request: "${text}" [lang=${lang}]. Attempting translate.googleapis.com API with client=gtx...`);
+      const apiDomain = "translate.googleapis.com";
+      const apiTtsUrl = `https://${apiDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=gtx&q=${encodeURIComponent(text)}`;
       try {
         response = await fetch(apiTtsUrl, {
           headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": `https://${googleDomain}/`
+            "Accept": "*/*",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
           }
         });
       } catch (err) {
-        console.warn("Failed to fetch translate.google.com due to network error/block:", err);
+        console.warn("Failed to fetch translate.googleapis.com/gtx due to network error/block:", err);
       }
 
-      // Attempt 2: Backup translate.googleapis.com with client=gtx fallback
+      // Attempt 2: Backup Google Translate client=tw-ob endpoint (domain: translate.google.com)
       if (!response || !response.ok) {
-        console.warn(`TTS translate.google.com failed (status ${response ? response.status : "thrown error"}). Trying translate.googleapis.com with client=gtx...`);
-        const apiDomain = "translate.googleapis.com";
-        const apiTtsUrlFallback = `https://${apiDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=gtx&q=${encodeURIComponent(text)}`;
+        console.warn(`TTS translate.googleapis.com/gtx failed (status ${response ? response.status : "thrown error"}). Trying translate.google.com with client=tw-ob...`);
+        const googleDomain = "translate.google.com";
+        const apiTtsUrlFallback = `https://${googleDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
         try {
           response = await fetch(apiTtsUrlFallback, {
             headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Referer": `https://${googleDomain}/`
             }
           });
         } catch (err) {
-          console.warn("Failed to fetch translate.googleapis.com due to network error/block:", err);
+          console.warn("Failed to fetch translate.google.com due to network error/block:", err);
         }
       }
 
