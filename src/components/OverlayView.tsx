@@ -311,6 +311,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
   const prevWidthRef = useRef<number | null>(null);
   const prevHeightRef = useRef<number | null>(null);
   const prevTypeRef = useRef<string | null>(null);
+  const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
 
   // Trigger hearts falling inside the glass with neck adjustments based on glassType
   const triggerFallingHearts = (count: number, customEmojis?: string[]) => {
@@ -1312,13 +1313,20 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
   // Text to speech engine
   // Pre-process and sanitize text for perfect Thai pronunciation & bypass robotic spelling of usernames
+  const sanitizeForTTS = (str: string) => {
+    if (!str) return '';
+    // Keep only safe characters: Thai (\u0E00-\u0E7F), English (a-zA-Z), numbers (0-9), safe punctuation (.,?!()-), and spaces.
+    // This cleanly strips all emojis, surrogate characters, and complex symbols that can glitch the TTS.
+    return str
+      .replace(/[^\u0E00-\u0E7Fa-zA-Z0-9\s.,?!()\-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
   const prepareTTSMsg = (type: 'chat' | 'gift' | 'follow' | 'share_image', nickname: string, mainContent: string) => {
     // 1. Clean main content (e.g., chat message or gift name) from emojis & non-pronounceable symbols
     // It is important to leave letters, numbers, spaces, and basic punctuation but strip visual emoji slop
-    let cleanComment = mainContent
-      .replace(/[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u200B-\u200D\uFE0F]|[\u2600-\u27BF]|[\uE000-\uF8FF]/g, '') // Safe surrogate-pairs and emoji/symbol stripping
-      .replace(/[~`@#$%^&*()_\-+={[}\]|\\:;"'<,>?\/]/g, ' ') // Replace punctuation causing synthesizer audio glitch with space
-      .trim();
+    let cleanComment = sanitizeForTTS(mainContent);
 
     // 2. Process nickname
     let cleanNickname = nickname.trim();
@@ -1326,9 +1334,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       cleanNickname = '';
     } else {
       // Clean nickname from emojis/symbols too
-      cleanNickname = cleanNickname
-        .replace(/[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u200B-\u200D\uFE0F]|[\u2600-\u27BF]|[\uE000-\uF8FF]/g, '')
-        .trim();
+      cleanNickname = sanitizeForTTS(cleanNickname);
 
       const hasThaiName = /[\u0E00-\u0E7F]/.test(cleanNickname);
       if (!hasThaiName) {
@@ -1366,13 +1372,15 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       const voices = window.speechSynthesis.getVoices();
       const hasThaiVoice = voices.some(v => v.lang.toLowerCase().startsWith('th') || v.lang.toLowerCase().includes('th-'));
 
+      console.log('TTS Request to perform voice speech:', { text, isThai, engine: settings.ttsEngine, hasThaiVoice });
+
       // Dual system: Force Google Translate TTS for Thai texts since browser Thai voices are often broken, robotic or non-existent in OBS/PCs
       const useGoogle = settings.ttsEngine === 'google' || isThai || !hasThaiVoice;
 
       if (useGoogle) {
         const langCode = isThai ? 'th' : 'en';
-        // Try stable googleapis API endpoint first client-side
-        const clientSideUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=${langCode}&client=gtx&q=${encodeURIComponent(text)}`;
+        // Try stable Google Translate endpoint first client-side (client=tw-ob is the most permissive & bypassed)
+        const clientSideUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langCode}&client=tw-ob&q=${encodeURIComponent(text)}`;
         
         // Dynamically create audio element and set referrerpolicy="no-referrer" to strip the Referer header
         // This makes Google see it as a direct client request and bypasses the 403 Forbidden/CORS blocks
@@ -1413,11 +1421,25 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
   const speakBrowserTTS = (text: string, isThai: boolean, voices: SpeechSynthesisVoice[]) => {
     try {
-      window.speechSynthesis.cancel(); // Cancel active speech
+      // 1. Cancel any active speech synthesis
+      window.speechSynthesis.cancel();
+      
+      // 2. Initialize the SpeechSynthesisUtterance
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = settings.ttsVoiceRate || 1.0;
       utterance.pitch = settings.ttsVoicePitch || 1.0;
       utterance.lang = isThai ? 'th-TH' : 'en-US';
+
+      // CRITICAL: Keep a hard reference to the utterance inside activeUtterancesRef 
+      // to prevent the infamous Chromium SpeechSynthesis garbage-collection bug that cuts speech off after 1-2 words!
+      activeUtterancesRef.current.push(utterance);
+      
+      const cleanRef = () => {
+        activeUtterancesRef.current = activeUtterancesRef.current.filter(u => u !== utterance);
+      };
+      
+      utterance.onend = cleanRef;
+      utterance.onerror = cleanRef;
 
       if (voices.length > 0) {
         let selectedVoice: SpeechSynthesisVoice | undefined = undefined;
@@ -1440,7 +1462,12 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
           utterance.lang = isThai ? 'th-TH' : 'en-US';
         }
       }
-      window.speechSynthesis.speak(utterance);
+
+      // 3. Play Browser Synthesis with a 50ms delay to let the browser safely and cleanly 
+      // handle the previous cancel() operation on the audio thread without cancellation races
+      setTimeout(() => {
+        window.speechSynthesis.speak(utterance);
+      }, 50);
     } catch (err) {
       console.warn('speakBrowserTTS error:', err);
     }

@@ -104,27 +104,27 @@ async function startServer() {
       // Truncate text to 150 characters (ideal TTS length limit for Google Translate & prevents 403 UI Blocks/414 URI errors)
       const text = rawText.substring(0, 150).trim();
 
-      // Attempt 1: Official Translate API endpoint (domain: translate.googleapis.com)
+      // Attempt 1: Standard stable Google Translate client=tw-ob endpoint (domain: translate.google.com)
       // Highly stable, handles automated query loads better without token/captcha blocks
-      const apiDomain = "translate.googleapis.com";
-      const apiTtsUrl = `https://${apiDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=gtx&q=${encodeURIComponent(text)}`;
+      const googleDomain = "translate.google.com";
+      const apiTtsUrl = `https://${googleDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
 
-      console.log(`TTS Request: "${text}" [lang=${lang}]. Attempting translate.googleapis.com API...`);
+      console.log(`TTS Request: "${text}" [lang=${lang}]. Attempting translate.google.com API...`);
       let response = await fetch(apiTtsUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": `https://${googleDomain}/`
         }
       });
 
-      // Attempt 2: Standard Google Translate client=tw-ob fallback
+      // Attempt 2: Backup translate.googleapis.com with client=gtx fallback
       if (!response.ok) {
-        console.warn(`TTS translate.googleapis.com failed (status ${response.status}). Trying translate.google.com with client=tw-ob...`);
-        const googleDomain = "translate.google.com";
-        const googleTtsUrl = `https://${googleDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
-        response = await fetch(googleTtsUrl, {
+        console.warn(`TTS translate.google.com failed (status ${response.status}). Trying translate.googleapis.com with client=gtx...`);
+        const apiDomain = "translate.googleapis.com";
+        const apiTtsUrlFallback = `https://${apiDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=gtx&q=${encodeURIComponent(text)}`;
+        response = await fetch(apiTtsUrlFallback, {
           headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": `https://${googleDomain}/`
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
         });
       }
