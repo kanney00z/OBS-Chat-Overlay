@@ -6,9 +6,11 @@
 import { useState, useEffect } from 'react';
 import DashboardView from './components/DashboardView';
 import OverlayView from './components/OverlayView';
+import DonationPageView from './components/DonationPageView';
 
 export default function App() {
   const [isOverlay, setIsOverlay] = useState(false);
+  const [isDonate, setIsDonate] = useState(false);
 
   useEffect(() => {
     const handleUrlCheck = () => {
@@ -19,7 +21,13 @@ export default function App() {
         params.get('mode') === 'overlay' || 
         hash === '#overlay';
       
+      const isDonateRoute = 
+        params.get('donate') === 'true' || 
+        params.get('mode') === 'donate' || 
+        hash === '#donate';
+      
       setIsOverlay(isOverlayRoute);
+      setIsDonate(isDonateRoute);
     };
 
     handleUrlCheck();
@@ -30,6 +38,11 @@ export default function App() {
   if (isOverlay) {
     // Pure, untangled overlay for directly embedding in OBS
     return <OverlayView />;
+  }
+
+  if (isDonate) {
+    // Public page where viewers can generate QR codes and send donations in real-time
+    return <DonationPageView />;
   }
 
   // Visual customizer dashboard

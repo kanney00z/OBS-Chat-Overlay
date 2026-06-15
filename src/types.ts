@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type OverlayTheme = 'geometric' | 'cyberpunk' | 'glassmorphism' | 'bubblechat' | 'minimal' | 'retro' | 'twitch' | 'neon-glow' | 'kawaii' | 'gaming-red' | 'royal-gold' | 'cosmic-nebula' | 'futuristic-holo' | 'luxury-obsidian' | 'vintage-journal';
+export type OverlayTheme = 'geometric' | 'cyberpunk' | 'glassmorphism' | 'bubblechat' | 'minimal' | 'retro' | 'twitch' | 'neon-glow' | 'kawaii' | 'gaming-red' | 'royal-gold' | 'cosmic-nebula' | 'futuristic-holo' | 'luxury-obsidian' | 'vintage-journal' | 'pastel-candy' | 'cozy-cloud' | 'aesthetic-snow' | 'aesthetic-sakura' | 'multistream-k';
 
 export type GlassType = 'wine' | 'beaker' | 'beer' | 'cocktail' | 'wish-jar';
 
@@ -16,6 +16,7 @@ export interface OverlaySettings {
   showAvatars: boolean;
   showBadges: boolean;
   alertSounds: boolean;
+  alertPosition?: 'top-center' | 'middle';
   textToSpeech: boolean;
   ttsVoiceRate: number;
   ttsVoicePitch: number;
@@ -48,19 +49,24 @@ export interface OverlaySettings {
   timerDuration?: number; // initial duration in seconds
   timerPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center'; // position of the timer
   timerOnlyNumbers?: boolean; // display only numbers without container box or extra labels
-  timerGlowColor?: 'cyan' | 'pink' | 'orange-gold' | 'white-3d' | 'green-matrix' | 'neon-purple'; // glow style of naked transparent timer
+  timerGlowColor?: 'cyan' | 'pink' | 'orange-gold' | 'white-3d' | 'green-matrix' | 'neon-purple' | 'crimson' | 'voltage' | 'cotton-candy' | 'platinum-diamond'; // glow style of naked transparent timer
   timerFontSize?: number; // customized font size for the stream timer
+  timerFontFamily?: string; // custom digital font family for countdown timer digits
+  timerIcon?: string; // emoji or prefix icon for the timer
+  timerLabel?: string; // customizable title/text above the clock
+  layoutOrientation?: 'vertical' | 'horizontal'; // orientation of the chat messages
 }
 
 export interface ChatMessage {
   id: string;
   timestamp: number;
-  type: 'chat' | 'gift' | 'like' | 'follow' | 'share' | 'share_image';
+  type: 'chat' | 'gift' | 'like' | 'follow' | 'share' | 'share_image' | 'donate_alert';
   uniqueId: string; // @handle
   nickname: string; // friendly name
   comment?: string; // chat message text
   profilePictureUrl?: string; // avatar
   imageUrl?: string; // sent photo/image URL
+  amount?: number; // donation amount
   
   // Badges
   isModerator?: boolean;
@@ -79,10 +85,11 @@ export interface ChatMessage {
 
 export interface AlertEvent {
   id: string;
-  type: 'gift' | 'like' | 'follow' | 'share';
+  type: 'gift' | 'like' | 'follow' | 'share' | 'donate_alert';
   uniqueId: string;
   nickname: string;
   profilePictureUrl?: string;
   detailText: string;
+  amount?: number;
   timestamp: number;
 }

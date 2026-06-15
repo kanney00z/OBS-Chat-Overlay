@@ -27,7 +27,7 @@ async function startServer() {
     if (!timerState.isActive) {
       return timerState.secondsRemaining;
     }
-    const elapsedSeconds = Math.floor((Date.now() - timerState.lastUpdated) / 1000);
+    const elapsedSeconds = (Date.now() - timerState.lastUpdated) / 1000;
     return Math.max(0, timerState.secondsRemaining - elapsedSeconds);
   };
 
@@ -90,6 +90,119 @@ async function startServer() {
     }
   });
 
+  // Donation Alerts Shared State
+  interface LiveAlert {
+    id: string;
+    type: string; // 'donate_alert' | 'chat' | 'follow' | 'gift' | 'like'
+    uniqueId: string;
+    nickname: string;
+    comment?: string;
+    amount?: number;
+    diamondCount?: number;
+    profilePictureUrl?: string;
+    timestamp: number;
+    isModerator?: boolean;
+    isSubscriber?: boolean;
+    isVip?: boolean;
+  }
+
+  let liveAlerts: LiveAlert[] = [];
+
+  let streamerProfile = {
+    phone: "0821062891",
+    walletPhone: "0821062891",
+    bankName: "กสิกรไทย (KBANK)",
+    bankAccount: "738-2-19284-1",
+    bankOwner: "ลันตา สตรีมเมอร์",
+    name: "ลันตา สตรีมเมอร์",
+    coverImage: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=300",
+    bio: "สตรีมเมอร์สัญชาติไทย ยินดีต้อนรับทุกคนเข้าสู่คลังสนับสนุน OBS!"
+  };
+
+  // POST to trigger a live donation alert (or other alerts)
+  app.post("/api/alerts", (req, res) => {
+    try {
+      const { type, nickname, comment, amount, profilePictureUrl, isModerator, isSubscriber, isVip, diamondCount } = req.body;
+      const newAlert: LiveAlert = {
+        id: "alert_" + Date.now() + "_" + Math.floor(Math.random() * 10000),
+        type: type || 'donate_alert',
+        uniqueId: 'donor_' + Date.now() + "_" + Math.floor(Math.random() * 100),
+        nickname: nickname || 'ผู้สนับสนุนปริศนา',
+        comment: comment || '',
+        amount: amount !== undefined ? Number(amount) : undefined,
+        diamondCount: diamondCount !== undefined ? Number(diamondCount) : undefined,
+        profilePictureUrl: profilePictureUrl || '',
+        isModerator: !!isModerator,
+        isSubscriber: !!isSubscriber,
+        isVip: !!isVip,
+        timestamp: Date.now()
+      };
+      
+      liveAlerts.push(newAlert);
+      // Keep queue compact
+      if (liveAlerts.length > 50) {
+        liveAlerts.shift();
+      }
+      
+      res.json({ success: true, alert: newAlert });
+    } catch (err) {
+      console.error("Failed to post alert:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // GET to poll for new alerts since a given timestamp
+  app.get("/api/alerts", (req, res) => {
+    try {
+      const since = Number(req.query.since) || 0;
+      const filtered = liveAlerts.filter(alert => alert.timestamp > since);
+      res.json({ events: filtered, serverTime: Date.now() });
+    } catch (err) {
+      console.error("Failed to fetch alerts:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // GET/POST Streamer profile for public view page
+  app.get("/api/streamer/profile", (req, res) => {
+    res.json(streamerProfile);
+  });
+
+  app.post("/api/streamer/profile", (req, res) => {
+    try {
+      const { phone, walletPhone, bankName, bankAccount, bankOwner, name, coverImage, bio } = req.body;
+      if (phone !== undefined) streamerProfile.phone = String(phone);
+      if (walletPhone !== undefined) streamerProfile.walletPhone = String(walletPhone);
+      if (bankName !== undefined) streamerProfile.bankName = String(bankName);
+      if (bankAccount !== undefined) streamerProfile.bankAccount = String(bankAccount);
+      if (bankOwner !== undefined) streamerProfile.bankOwner = String(bankOwner);
+      if (name !== undefined) streamerProfile.name = String(name);
+      if (coverImage !== undefined) streamerProfile.coverImage = String(coverImage);
+      if (bio !== undefined) streamerProfile.bio = String(bio);
+      res.json({ success: true, profile: streamerProfile });
+    } catch (err) {
+      console.error("Failed to update profile:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Real-time Settings Sync for running OBS browser instances
+  let serverOverlaySettings: any = null;
+
+  app.get("/api/overlay/settings", (req, res) => {
+    res.json(serverOverlaySettings || {});
+  });
+
+  app.post("/api/overlay/settings", (req, res) => {
+    try {
+      serverOverlaySettings = req.body;
+      res.json({ success: true, settings: serverOverlaySettings });
+    } catch (err) {
+      console.error("Failed to update overlay settings:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // API Route: Server-Side TTS Proxy to bypass CORS & Referer blocks
   app.get("/api/tts", async (req, res) => {
     try {
@@ -106,56 +219,173 @@ async function startServer() {
       // Truncate text to 150 characters (ideal TTS length limit for Google Translate & prevents 403 UI Blocks/414 URI errors)
       const text = rawText.substring(0, 150).trim();
 
-      // Check if we should attempt premium Google Cloud TTS
-      const apiKey = clientApiKey || process.env.GEMINI_API_KEY || "";
-      let response: Response | null = null;
-
-      if ((clientEngine === "google_cloud_premium" || clientApiKey) && apiKey) {
-        console.log(`TTS: Attempting Premium Google Cloud Text-to-Speech API. Key length: ${apiKey.length}`);
+      // 1. Check if client specifically requested cute TikTok girl voice
+      if (clientEngine === "tiktok_cute" || (lang === "th" && clientEngine === "tiktok")) {
+        console.log(`TTS: Utilizing public TikTok TTS worker for adorable Thai female voice: "${text.substring(0, 20)}..."`);
         try {
-          const cloudTtsUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
-          
-          // Neural2 yields human-grade, state-of-the-art synthetic speech
-          // Wavenet is also excellent, and standard is the cost-efficient one.
-          // Let's use neural2 as standard tier, falling back to Wavenet / Standard if Neural2 throws quota errors.
-          const cloudTtsBody = {
-            input: { text: text },
-            voice: {
-              languageCode: lang === "th" ? "th-TH" : "en-US",
-              name: lang === "th" ? "th-TH-Neural2-F" : "en-US-Neural2-F",
-              ssmlGender: "FEMALE"
-            },
-            audioConfig: {
-              audioEncoding: "MP3"
-            }
-          };
-
-          const cloudRes = await fetch(cloudTtsUrl, {
+          const resTiktok = await fetch("https://tiktok-tts.weilnet.workers.dev/api/generation", {
             method: "POST",
             headers: {
-              "Content-Type": "application/json"
+              "Content-Type": "application/json",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
             },
-            body: JSON.stringify(cloudTtsBody)
+            body: JSON.stringify({
+              text: text,
+              voice: "th_001" // Premium cute TikTok Thai Female voice
+            })
           });
 
-          if (cloudRes.ok) {
-            const data: any = await cloudRes.json();
-            if (data.audioContent) {
-              console.log(`TTS Premium success: Produced high-quality bytes for text: "${text.substring(0, 20)}..."`);
-              const buffer = Buffer.from(data.audioContent, "base64");
+          if (resTiktok.ok) {
+            const dataTiktok: any = await resTiktok.json();
+            if (dataTiktok.success && dataTiktok.data) {
+              console.log(`TTS TikTok (public worker) success: Generated cute female Thai audio`);
+              const buffer = Buffer.from(dataTiktok.data, "base64");
               res.setHeader("Content-Type", "audio/mpeg");
               res.setHeader("Content-Length", buffer.length);
               res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 24 hours
               res.send(buffer);
               return;
+            } else {
+              console.warn("TikTok public worker responded but success was false or data was empty, continuing fallbacks...");
             }
           } else {
-            const errorText = await cloudRes.text();
-            console.warn(`Premium Google Cloud TTS returned non-OK status (${cloudRes.status}):`, errorText);
-            // Don't crash, let it cascade down to free scrapers so the user's overlay remains operational!
+            console.warn(`TikTok public worker responded with non-200: ${resTiktok.status}`);
           }
-        } catch (cloudErr) {
-          console.error("Failed to fetch from premium Google Cloud Text-to-Speech API:", cloudErr);
+        } catch (tiktokError) {
+          console.error("TikTok public worker synthesis failed, cascading standard fallbacks:", tiktokError);
+        }
+      }
+
+      // Check if we should attempt premium Google Cloud TTS
+      const apiKey = (clientApiKey || process.env.GEMINI_API_KEY || "").trim();
+      let response: Response | null = null;
+
+      // Smart detector: If key starts with "AQ.", it is a TikTok Session ID/Cookie!
+      if (apiKey.startsWith("AQ.")) {
+        console.log(`TTS: Automatically detected TikTok Session ID. Utilizing premium TikTok TTS for high-quality Thai voice...`);
+        
+        // Correct path is /media/api/text/speech/ or /media/api/text/speech/invoke/ (trailing slashes before query parameters are strictly required by TikTok's routers to avoid 404s)
+        // We list multiple robust endpoints for redundancy.
+        const tiktokEndpoints = [
+          "https://api16-normal-v6.tiktokv.com/media/api/text/speech/invoke/?device_id=5555555555555555555&user_id=5555555555555555555&aid=1233",
+          "https://api16-normal-useast5.us.tiktokv.com/media/api/text/speech/invoke/?device_id=5555555555555555555&user_id=5555555555555555555&aid=1233",
+          "https://api16-normal-c-useast1a.tiktokv.com/media/api/text/speech/invoke/?device_id=5555555555555555555&user_id=5555555555555555555&aid=1233",
+          "https://api16-normal-v4.amemv.com/media/api/text/speech/invoke/?device_id=5555555555555555555&user_id=5555555555555555555&aid=1233",
+          "https://api16-normal-useast5.us.tiktokv.com/media/api/text/speech/?device_id=5555555555555555555&user_id=5555555555555555555&aid=1180",
+          "https://api16-normal-c-useast1a.tiktokv.com/media/api/text/speech/?device_id=5555555555555555555&user_id=5555555555555555555&aid=1180"
+        ];
+
+        let tiktokSuccess = false;
+
+        for (const tiktokUrl of tiktokEndpoints) {
+          try {
+            const host = tiktokUrl.split('/')[2];
+            const isInvoke = tiktokUrl.includes('/invoke');
+            console.log(`TTS TikTok: Trying endpoint ${host} (${isInvoke ? 'invoke' : 'classic'})...`);
+            
+            // Famous natural TikTok Thai speaker: th_001, fallback English: en_us_001
+            const speaker = lang === "th" ? "th_001" : "en_us_001";
+            
+            // For invoke standard we prepare text spaces with "+" as required by some TikTok TTS sanitization steps
+            const preparedText = text.replace(/\+/g, 'plus').replace(/\s/g, '+').replace(/&/g, 'and');
+            
+            const queryBody = new URLSearchParams();
+            queryBody.append("text_speaker", speaker);
+            queryBody.append("req_text", preparedText);
+            queryBody.append("speaker_map_type", "0");
+            queryBody.append("aid", "1233");
+
+            const tiktokRes = await fetch(tiktokUrl, {
+              method: "POST",
+              headers: {
+                "User-Agent": "com.zhiliaoapp.musically/2022600030 (Linux; U; Android 7.1.2; es_ES; SM-G988N; Build/NRD90M;tt-ok/3.12.13.1)",
+                "Cookie": `sessionid=${apiKey}`,
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept-Encoding": "gzip,deflate,compress"
+              },
+              body: queryBody.toString()
+            });
+
+            if (tiktokRes.ok) {
+              const data: any = await tiktokRes.json();
+              const base64Audio = data && data.data && (data.data.v_audio || data.data.v_str);
+
+              if (base64Audio) {
+                console.log(`TTS TikTok success: Generated premium TikTok audio using ${host} for: "${text.substring(0, 20)}..."`);
+                const buffer = Buffer.from(base64Audio, "base64");
+                res.setHeader("Content-Type", "audio/mpeg");
+                res.setHeader("Content-Length", buffer.length);
+                res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 24 hours
+                res.send(buffer);
+                tiktokSuccess = true;
+                break;
+              } else {
+                console.log(`TikTok-TTS info: ${host} checked, cascading fallback...`);
+              }
+            } else {
+              console.log(`TikTok-TTS info: ${host} responded, cascading fallback...`);
+            }
+          } catch (err: any) {
+            console.log(`TikTok-TTS info: ${tiktokUrl.split('/')[2]} offline, skipping...`);
+          }
+        }
+
+        if (tiktokSuccess) {
+          return;
+        } else {
+          console.log("TikTok-TTS: Moving to standard Google translation voice engine.");
+        }
+      } else if ((clientEngine === "google_cloud_premium" || clientApiKey) && apiKey) {
+        // Run Google Premium only if the key is formatted like Google API key (starts with AIzaSy)
+        if (!apiKey.startsWith("AIzaSy")) {
+          console.log(`TTS: Skipping Google Cloud Premium because key doesn't start with 'AIzaSy' (likely invalid or generic key). Cascading...`);
+        } else {
+          console.log(`TTS: Attempting Premium Google Cloud Text-to-Speech API. Key length: ${apiKey.length}`);
+          try {
+            const cloudTtsUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+            
+            // Neural2 yields human-grade, state-of-the-art synthetic speech
+            // Wavenet is also excellent, and standard is the cost-efficient one.
+            // Let's use neural2 as standard tier, falling back to Wavenet / Standard if Neural2 throws quota errors.
+            const cloudTtsBody = {
+              input: { text: text },
+              voice: {
+                languageCode: lang === "th" ? "th-TH" : "en-US",
+                name: lang === "th" ? "th-TH-Neural2-F" : "en-US-Neural2-F",
+                ssmlGender: "FEMALE"
+              },
+              audioConfig: {
+                audioEncoding: "MP3"
+              }
+            };
+
+            const cloudRes = await fetch(cloudTtsUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(cloudTtsBody)
+            });
+
+            if (cloudRes.ok) {
+              const data: any = await cloudRes.json();
+              if (data.audioContent) {
+                console.log(`TTS Premium success: Produced high-quality bytes for text: "${text.substring(0, 20)}..."`);
+                const buffer = Buffer.from(data.audioContent, "base64");
+                res.setHeader("Content-Type", "audio/mpeg");
+                res.setHeader("Content-Length", buffer.length);
+                res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 24 hours
+                res.send(buffer);
+                return;
+              }
+            } else {
+              const errorText = await cloudRes.text();
+              console.log(`Premium Google Cloud TTS returned non-OK status (${cloudRes.status}):`, errorText);
+              // Don't crash, let it cascade down to free scrapers so the user's overlay remains operational!
+            }
+          } catch (cloudErr) {
+            console.log("Premium Google TTS query was unsuccessful:", cloudErr);
+          }
         }
       }
 
@@ -173,12 +403,12 @@ async function startServer() {
           }
         });
       } catch (err) {
-        console.warn("Failed to fetch translate.googleapis.com/gtx due to network error/block:", err);
+        console.log("Connection with translation service gtx had an issue:", err);
       }
 
       // Attempt 2: Backup Google Translate client=tw-ob endpoint (domain: translate.google.com)
       if (!response || !response.ok) {
-        console.warn(`TTS translate.googleapis.com/gtx failed (status ${response ? response.status : "thrown error"}). Trying translate.google.com with client=tw-ob...`);
+        console.log(`TTS translate.googleapis.com/gtx completed with status ${response ? response.status : "connection problem"}. Attempting standard browser translator client...`);
         const googleDomain = "translate.google.com";
         const apiTtsUrlFallback = `https://${googleDomain}/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
         try {
@@ -189,14 +419,14 @@ async function startServer() {
             }
           });
         } catch (err) {
-          console.warn("Failed to fetch translate.google.com due to network error/block:", err);
+          console.log("Standard browser translator client had an issue:", err);
         }
       }
 
       // Attempt 3: Bulletproof SoundOfText API Proxy fallback
       // Since SoundOfText is hosted externally, it is highly immune to local Cloud Run IP bans or Google captchas.
       if (!response || !response.ok) {
-        console.warn(`TTS translate.google.com failed (status ${response ? response.status : "thrown error"}). Launching SoundOfText API Relay...`);
+        console.log(`TTS browser translator completed with status ${response ? response.status : "connection problem"}. Utilizing SoundOfText API fallback...`);
         try {
           const soundOfTextVoice = lang === "th" ? "th-TH" : "en-US";
           const sotRegisterRes = await fetch("https://api.soundoftext.com/sounds", {

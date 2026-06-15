@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquare, Heart, Gift, UserPlus, Share2, Shield, Star, Award, WifiOff, Volume2, Image, Sparkles, Camera, Crown } from 'lucide-react';
+import { MessageSquare, Heart, Gift, UserPlus, Share2, Shield, Star, Award, WifiOff, Volume2, Image, Sparkles, Camera, Crown, Coins } from 'lucide-react';
 import { ChatMessage, AlertEvent, OverlaySettings, OverlayTheme } from '../types';
 import { soundSynth } from '../utils/audio';
 import VectorAvatar from './VectorAvatar';
@@ -111,8 +111,8 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     };
   }, [audioLocked]);
 
-  // Parse settings from URL or override
-  const settings = useMemo<OverlaySettings>(() => {
+  // Parse baseline configurations
+  const baselineSettings = useMemo<OverlaySettings>(() => {
     const searchParams = new URLSearchParams(window.location.search);
     
     // Fallback constants
@@ -125,6 +125,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       showAvatars: true,
       showBadges: true,
       alertSounds: true,
+      alertPosition: 'top-center',
       textToSpeech: false,
       ttsVoiceRate: 1.0,
       ttsVoicePitch: 1.0,
@@ -185,6 +186,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         showAvatars: searchParams.has('showAvatars') ? searchParams.get('showAvatars') !== 'false' : (savedSettings.showAvatars !== undefined ? savedSettings.showAvatars : true),
         showBadges: searchParams.has('showBadges') ? searchParams.get('showBadges') !== 'false' : (savedSettings.showBadges !== undefined ? savedSettings.showBadges : true),
         alertSounds: searchParams.has('alertSounds') ? searchParams.get('alertSounds') !== 'false' : (savedSettings.alertSounds !== undefined ? savedSettings.alertSounds : true),
+        alertPosition: (searchParams.get('alertPosition') as any) || savedSettings.alertPosition || defaultSettings.alertPosition || 'top-center',
         textToSpeech: searchParams.has('textToSpeech') ? searchParams.get('textToSpeech') === 'true' : (savedSettings.textToSpeech !== undefined ? savedSettings.textToSpeech : false),
         ttsVoiceRate: Number(searchParams.get('ttsVoiceRate')) || savedSettings.ttsVoiceRate || defaultSettings.ttsVoiceRate,
         ttsVoicePitch: Number(searchParams.get('ttsVoicePitch')) || savedSettings.ttsVoicePitch || defaultSettings.ttsVoicePitch,
@@ -217,13 +219,84 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         timerPosition: (searchParams.get('timerPosition') as any) || savedSettings.timerPosition || 'top-left',
         timerOnlyNumbers: searchParams.has('timerOnlyNumbers') ? searchParams.get('timerOnlyNumbers') === 'true' : (savedSettings.timerOnlyNumbers !== undefined ? savedSettings.timerOnlyNumbers : false),
         timerGlowColor: (searchParams.get('timerGlowColor') as any) || savedSettings.timerGlowColor || 'cyan',
-        timerFontSize: searchParams.has('timerFontSize') ? Number(searchParams.get('timerFontSize')) : (savedSettings.timerFontSize || 48)
+        timerFontSize: searchParams.has('timerFontSize') ? Number(searchParams.get('timerFontSize')) : (savedSettings.timerFontSize || 48),
+        timerFontFamily: searchParams.get('timerFontFamily') || savedSettings.timerFontFamily || undefined,
+        timerIcon: searchParams.get('timerIcon') || savedSettings.timerIcon || undefined,
+        timerLabel: searchParams.get('timerLabel') || savedSettings.timerLabel || undefined,
+        layoutOrientation: (searchParams.get('layoutOrientation') as any) || savedSettings.layoutOrientation || defaultSettings.layoutOrientation || 'vertical'
       };
       return parsed;
     } catch {
       return { ...defaultSettings, ...savedSettings };
     }
   }, [settingsOverride, window.location.search]);
+
+  // Keep settings in mutable state for live server modifications
+  const [settings, setSettings] = useState<OverlaySettings>(baselineSettings);
+
+  // Sync state whenever prop / URL baseline changes
+  useEffect(() => {
+    setSettings(baselineSettings);
+  }, [baselineSettings]);
+
+  // Real-time Settings Poll from server for actual running OBS browser instances
+  useEffect(() => {
+    if (isDemo) return;
+
+    let pollInterval: any;
+    const pollServerSettings = async () => {
+      try {
+        const res = await fetch('/api/overlay/settings');
+        if (res.ok) {
+          const serverSettings = await res.json();
+          if (serverSettings && Object.keys(serverSettings).length > 0) {
+            setSettings(prev => {
+              // Ensure we merge and apply the settings dynamically
+              const keys = Object.keys(serverSettings);
+              let hasChanged = false;
+              for (const key of keys) {
+                // If the URL parameters specified a specific sub-mode, preserve that specific URL mode!
+                if (key === 'mode') {
+                  const urlParams = new URLSearchParams(window.location.search);
+                  if (urlParams.has('mode') || urlParams.has('overlay')) {
+                    continue; // Skip overriding specialized URL modes
+                  }
+                }
+                
+                if (JSON.stringify((prev as any)[key]) !== JSON.stringify((serverSettings as any)[key])) {
+                  hasChanged = true;
+                  break;
+                }
+              }
+
+              if (hasChanged) {
+                // Construct merged object
+                const merged = { ...prev };
+                for (const key of keys) {
+                  if (key === 'mode') {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.has('mode') || urlParams.has('overlay')) {
+                      continue; 
+                    }
+                  }
+                  (merged as any)[key] = (serverSettings as any)[key];
+                }
+                return merged;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Overlay failed to poll server settings:', err);
+      }
+    };
+
+    pollServerSettings();
+    pollInterval = setInterval(pollServerSettings, 1200);
+
+    return () => clearInterval(pollInterval);
+  }, [isDemo]);
 
   const [timerLeft, setTimerLeft] = useState<number>(300);
   const [timerActive, setTimerActive] = useState<boolean>(false);
@@ -264,7 +337,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     if (!settings.showTimer && settings.mode !== 'timer_only') return;
 
     let syncInterval: any;
-    let tickInterval: any;
+    let animationFrameId: number;
 
     const fetchTimerState = async () => {
       try {
@@ -287,8 +360,8 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     fetchTimerState();
     syncInterval = setInterval(fetchTimerState, 1500);
 
-    // Keep counting down locally at 60fps (or very high frequency) for perfectly smooth visual output
-    tickInterval = setInterval(() => {
+    // Keep counting down locally with requestAnimationFrame for 60fps/120fps fluid smoothness
+    const tick = () => {
       const { serverSeconds, serverActive, localTimeOfFetch } = timerSyncRef.current;
       if (serverActive) {
         const elapsedSinceFetch = (Date.now() - localTimeOfFetch) / 1000;
@@ -297,11 +370,14 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       } else {
         setTimerLeft(serverSeconds);
       }
-    }, 50);
+      animationFrameId = requestAnimationFrame(tick);
+    };
+
+    animationFrameId = requestAnimationFrame(tick);
 
     return () => {
       clearInterval(syncInterval);
-      clearInterval(tickInterval);
+      cancelAnimationFrame(animationFrameId);
     };
   }, [settings.showTimer, settings.mode]);
 
@@ -1051,6 +1127,26 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     return color;
   };
 
+  const getSnowNicknameColor = (uniqueId: string) => {
+    const bgColors = [
+      'bg-gradient-to-r from-[#FF6B6B] to-[#ee5253]', // coral
+      'bg-gradient-to-r from-[#FF8E53] to-[#ff9f43]', // orange
+      'bg-gradient-to-r from-[#45AAF2] to-[#2e86de]', // sky blue
+      'bg-gradient-to-r from-[#20BF6B] to-[#10ac84]', // emerald
+      'bg-gradient-to-r from-[#A55EEA] to-[#8854d0]', // purple
+      'bg-gradient-to-r from-[#FD9644] to-[#e67e22]', // orange-gold
+      'bg-gradient-to-r from-[#2BCBBA] to-[#0fbcf9]', // cyan
+      'bg-gradient-to-r from-[#ED4C67] to-[#b53471]', // crimson
+      'bg-gradient-to-r from-[#128C7E] to-[#075e54]', // forest teal
+      'bg-gradient-to-r from-[#F79F1F] to-[#ee5a24]', // sunset glow
+    ];
+    let hash = 0;
+    for (let i = 0; i < uniqueId.length; i++) {
+      hash = uniqueId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return bgColors[Math.abs(hash) % bgColors.length];
+  };
+
   // Active avatars walking around
   interface StreamAvatar {
     id: string;
@@ -1323,7 +1419,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       .trim();
   };
 
-  const prepareTTSMsg = (type: 'chat' | 'gift' | 'follow' | 'share_image', nickname: string, mainContent: string) => {
+  const prepareTTSMsg = (type: 'chat' | 'gift' | 'follow' | 'share_image' | 'donate_alert', nickname: string, mainContent: string) => {
     // 1. Clean main content (e.g., chat message or gift name) from emojis & non-pronounceable symbols
     // It is important to leave letters, numbers, spaces, and basic punctuation but strip visual emoji slop
     let cleanComment = sanitizeForTTS(mainContent);
@@ -1356,6 +1452,8 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       finalSpokenText = cleanNickname ? `${cleanNickname} ได้กดติดตามช่องแล้ว!` : `มีผู้ติดตามคนใหม่แล้ว!`;
     } else if (type === 'share_image') {
       finalSpokenText = cleanNickname ? `${cleanNickname} ได้ส่งรูปภาพ และบอกว่า ${cleanComment}` : `ส่งรูปภาพ ${cleanComment}`;
+    } else if (type === 'donate_alert') {
+      finalSpokenText = cleanNickname ? `${cleanNickname} ได้ส่งสนับสนุน ${cleanComment}!` : `ได้รับสนับสนุน ${cleanComment}!`;
     }
 
     // 4. Identify if it contains Thai characters to select voice localized domain later
@@ -1437,7 +1535,23 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
 
       console.log('TTS Request to perform voice speech:', { text, isThai, engine: settings.ttsEngine, hasThaiVoice });
 
-      if (settings.ttsEngine === 'google_cloud_premium') {
+      if (settings.ttsEngine === 'tiktok_cute') {
+        const serverUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}&engine=tiktok_cute`;
+        
+        const audio = document.createElement('audio');
+        audio.setAttribute('referrerpolicy', 'no-referrer');
+        audio.src = serverUrl;
+        audio.playbackRate = settings.ttsVoiceRate || 1.0;
+        
+        audio.play()
+          .then(() => {
+            console.log('Successfully played Premium TikTok Cute Female TTS stream');
+          })
+          .catch(err => {
+            console.warn('TikTok Cute Female TTS play failed, falling back to browser synthesis:', err);
+            speakBrowserTTS(text, isThai, voices, false);
+          });
+      } else if (settings.ttsEngine === 'google_cloud_premium') {
         const apiKeyParam = settings.ttsApiKey ? `&apiKey=${encodeURIComponent(settings.ttsApiKey)}` : '';
         const serverUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${langCode}&engine=google_cloud_premium${apiKeyParam}`;
         
@@ -1512,10 +1626,28 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
           selectedVoice = voices.find(v => v.name === settings.ttsVoiceName);
         }
         if (!selectedVoice) {
-          selectedVoice = voices.find(v => {
-            const langLower = v.lang.toLowerCase();
-            return isThai ? (langLower.startsWith('th') || langLower.includes('th-')) : (langLower.startsWith('en') || langLower.includes('en-'));
-          });
+          if (isThai) {
+            // Prioritize gorgeous female voices to avoid the default nerdy male Google voice in Chrome!
+            const femaleKeywords = ['premwadee', 'pattara', 'kanya', 'narisa', 'apasara', 'achara', 'female', 'girl', 'cute'];
+            const thVoices = voices.filter(v => {
+              const langLower = v.lang.toLowerCase();
+              return langLower.startsWith('th') || langLower.includes('th-');
+            });
+            
+            selectedVoice = thVoices.find(v => {
+              const nameLower = v.name.toLowerCase();
+              return femaleKeywords.some(kw => nameLower.includes(kw));
+            });
+            
+            if (!selectedVoice && thVoices.length > 0) {
+              selectedVoice = thVoices[0];
+            }
+          } else {
+            selectedVoice = voices.find(v => {
+              const langLower = v.lang.toLowerCase();
+              return langLower.startsWith('en') || langLower.includes('en-');
+            });
+          }
         }
         
         if (selectedVoice) {
@@ -1553,7 +1685,11 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
               ? ['#fbbf24', '#f59e0b', '#d97706', '#3f3f46']
               : theme === 'vintage-journal'
                 ? ['#c54b3c', '#8c7460', '#4a3b32', '#fbf5e6']
-                : ['#FFB6C1', '#FFF', '#D8BFD8', '#E6E6FA']; // Pastel sakura
+                : theme === 'pastel-candy'
+                  ? ['#FF69B4', '#FFB6C1', '#00F0FF', '#FFF', '#FFD700']
+                  : theme === 'cozy-cloud'
+                    ? ['#D8BFD8', '#E6E6FA', '#87CEFA', '#FFF0F5', '#FFF']
+                    : ['#FFB6C1', '#FFF', '#D8BFD8', '#E6E6FA']; // Pastel sakura
 
     for (let i = 0; i < 40; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -1671,6 +1807,10 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       } else if (messageObj.type === 'share_image' && (settings.ttsReadShareImage !== false)) {
         const { text, isThai } = prepareTTSMsg('share_image', messageObj.nickname, messageObj.comment || '');
         if (text) triggerTTS(text, isThai);
+      } else if (messageObj.type === 'donate_alert') {
+        const msgToRead = `${messageObj.amount || 0} บาท ${messageObj.comment || ""}`;
+        const { text, isThai } = prepareTTSMsg('donate_alert', messageObj.nickname, msgToRead);
+        if (text) triggerTTS(text, isThai);
       }
     }
 
@@ -1784,6 +1924,8 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         detailText = `ได้แชร์สตรีมแล้ว!`;
       } else if (messageObj.type === 'like') {
         detailText = `ได้ถูกใจสตรีมแล้ว!`;
+      } else if (messageObj.type === 'donate_alert') {
+        detailText = `ได้สนับสนุน ฿${messageObj.amount || 0} บาท! ${messageObj.comment ? `"${messageObj.comment}"` : ''}`;
       }
 
       const alertId = Math.random().toString(36).substr(2, 9);
@@ -1794,6 +1936,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         nickname: messageObj.nickname,
         profilePictureUrl: messageObj.profilePictureUrl,
         detailText,
+        amount: messageObj.amount,
         timestamp
       };
 
@@ -1815,6 +1958,32 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       };
     }
   }, [isDemo, settings]);
+
+  // Poll real-time dynamic donations from viewer page (works both in preview and real OBS browser source)
+  const lastAlertTimestampRef = useRef<number>(Date.now());
+  useEffect(() => {
+    const pollAlerts = async () => {
+      try {
+        const res = await fetch(`/api/alerts?since=${lastAlertTimestampRef.current}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.events && data.events.length > 0) {
+            data.events.forEach((alert: any) => {
+              handleIncomingMessage(alert);
+            });
+          }
+          if (data.serverTime) {
+            lastAlertTimestampRef.current = data.serverTime;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to poll server-side alerts:", err);
+      }
+    };
+
+    const interval = setInterval(pollAlerts, 1500);
+    return () => clearInterval(interval);
+  }, [settings]);
 
   // Clean-up expired messages periodically if messageLifetime > 0
   useEffect(() => {
@@ -2066,6 +2235,21 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     const isKeywordHighlighted = msg.comment && settings.highlightKeywords.some(kw => msg.comment?.toLowerCase().includes(kw.toLowerCase()));
 
     switch (settings.theme) {
+      case 'multistream-k':
+        return {
+          wrapper: `relative p-3 rounded-[24px] mb-3 flex items-start gap-2.5 select-none duration-300 transition-all ${
+            isSpecialType 
+              ? 'bg-gradient-to-r from-indigo-500/10 to-transparent border border-indigo-500/20 shadow-sm' 
+              : isKeywordHighlighted 
+                ? 'bg-rose-500/10 border border-rose-500/30 shadow-[0_4px_12px_rgba(244,63,94,0.12)] animate-pulse' 
+                : 'bg-zinc-950/80 border border-white/5 shadow-md hover:border-white/10'
+          }`,
+          name: 'text-[12.5px] font-black text-indigo-400 tracking-wide font-sans',
+          body: 'text-zinc-100 font-bold tracking-tight text-[13px] leading-relaxed break-words w-full overflow-hidden truncate font-sans',
+          badge: 'bg-zinc-900 border border-zinc-800 text-[8.5px] px-1.5 py-0.5 rounded-full font-mono font-bold',
+          badgeText: 'text-zinc-400'
+        };
+
       case 'geometric':
         return {
           wrapper: `relative border-l-2 p-3 bg-[#0c0c0e]/95 mb-2.5 shadow-sm border border-zinc-800/80 overflow-hidden flex items-start gap-2.5 select-none ${
@@ -2276,6 +2460,51 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
           badgeText: 'text-white'
         };
 
+      case 'aesthetic-snow':
+        return {
+          wrapper: `relative p-4 rounded-3xl mb-3 flex flex-col gap-2 select-none transition-all duration-300 ${
+            isSpecialType 
+              ? 'bg-[#18112e]/90 border-[#ff5e7e]/40 shadow-[0_8px_24px_rgba(255,94,126,0.35)] ring-2 ring-[#ff5e7e]/25' 
+              : isKeywordHighlighted 
+                ? 'bg-[#1c1221]/90 border-pink-400 shadow-[0_8px_24px_rgba(244,114,182,0.35)] ring-2 ring-pink-400/25 animate-pulse' 
+                : 'bg-[#0f0c1b]/70 border-zinc-800/35 hover:border-zinc-700/50 shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-md hover:scale-[1.01]'
+          }`,
+          name: 'text-white font-extrabold text-[12.5px] font-sans tracking-wide truncate',
+          body: 'font-sans text-[13px] text-zinc-100 font-bold leading-relaxed break-words w-full overflow-hidden truncate',
+          badge: 'bg-zinc-800/80 text-zinc-300 text-[8.5px] px-2 py-0.5 rounded-full font-extrabold border border-zinc-700/50 shadow-xs flex items-center gap-1',
+          badgeText: 'text-zinc-200'
+        };
+
+      case 'pastel-candy':
+        return {
+          wrapper: `relative p-3.5 rounded-2xl rounded-tr-md mb-3 border-2 flex items-start gap-3 select-none transition-all duration-300 ${
+            isSpecialType 
+              ? 'bg-amber-50/95 border-amber-300/80 shadow-[0_6px_20px_rgba(245,158,11,0.2)] ring-2 ring-amber-100' 
+              : isKeywordHighlighted 
+                ? 'bg-rose-50/95 border-rose-300/80 shadow-[0_6px_20px_rgba(244,63,94,0.2)] ring-2 ring-rose-100 animate-pulse' 
+                : 'bg-white/95 border-pink-200/85 shadow-[0_6px_20px_rgba(244,114,182,0.18)] hover:shadow-[0_10px_25px_rgba(244,114,182,0.3)] hover:scale-[1.01] ring-2 ring-purple-100/50'
+          }`,
+          name: 'text-[12.5px] font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 font-sans tracking-wide drop-shadow-xs',
+          body: 'font-sans text-[13px] text-pink-950 font-bold leading-relaxed break-words w-full overflow-hidden truncate',
+          badge: 'bg-gradient-to-r from-pink-400 via-pink-550 to-purple-400 text-white text-[8.5px] px-2 py-0.5 rounded-full font-extrabold shadow-sm border border-white/20',
+          badgeText: 'text-white'
+        };
+
+      case 'cozy-cloud':
+        return {
+          wrapper: `relative py-3.5 px-4 rounded-[22px] rounded-tl-sm mb-3 border flex items-start gap-3 select-none transition-all duration-350 ${
+            isSpecialType 
+              ? 'bg-[#fffdf2]/95 border-[#fef08a] shadow-[0_6px_22px_rgba(250,204,21,0.22)] ring-1 ring-yellow-200' 
+              : isKeywordHighlighted 
+                ? 'bg-[#fff5f5]/95 border-[#fecdd3] shadow-[0_6px_22px_rgba(244,63,94,0.22)] ring-1 ring-rose-200 font-medium' 
+                : 'bg-[#f5f8ff]/95 border-[#dbeafe] shadow-[0_6px_22px_rgba(147,197,253,0.25)] hover:shadow-[0_10px_28px_rgba(147,197,253,0.38)] hover:-translate-y-0.5'
+          }`,
+          name: 'text-[12.5px] font-bold text-indigo-600 tracking-tight font-sans drop-shadow-xs',
+          body: 'font-sans text-[12.5px] text-slate-700 font-semibold leading-relaxed break-words w-full overflow-hidden truncate',
+          badge: 'bg-[#4f46e5]/90 text-white text-[8px] px-1.5 py-0.5 rounded-full font-extrabold font-mono border border-indigo-200/20 shadow-xs',
+          badgeText: 'text-white'
+        };
+
       case 'twitch':
       default:
         return {
@@ -2298,50 +2527,50 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     switch (settings.theme) {
       case 'cyberpunk':
         return {
-          container: 'bg-slate-950/95 border border-cyan-500/40 text-white shadow-[0_0_15px_rgba(0,240,255,0.2)] p-3 rounded-none font-mono tracking-wider text-center select-none w-[170px]',
-          numberClass: 'text-3xl font-black text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]',
+          container: 'bg-slate-950/95 border border-cyan-500/40 text-white shadow-[0_0_15px_rgba(0,240,255,0.25)] p-3 rounded-none font-mono tracking-wider text-center select-none w-[170px]',
+          numberClass: 'text-3xl font-black timer-glow-cyan',
           labelClass: 'text-[9px] text-[#FF007F] font-bold uppercase tracking-widest',
           statusClass: 'bg-cyan-950/60 text-[#00F0FF] border border-[#00F0FF]/30 px-1.5 py-0.5 text-[8.5px] font-bold mt-1 inline-block'
         };
       case 'retro':
         return {
           container: 'bg-black border-4 border-white p-2.5 shadow-[4px_4px_0_rgba(255,255,255,1)] text-white font-mono text-center select-none w-[170px]',
-          numberClass: 'text-3xl font-bold text-amber-500 tracking-tight font-mono',
+          numberClass: 'text-3xl font-bold timer-glow-orange-gold font-mono',
           labelClass: 'text-[9px] text-zinc-400 uppercase tracking-widest',
           statusClass: 'bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 text-[8.5px] mt-1 text-zinc-350 font-bold inline-block'
         };
       case 'glassmorphism':
         return {
           container: 'bg-white/10 border border-white/20 backdrop-blur-md p-3.5 rounded-2xl text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] text-center select-none w-[170px]',
-          numberClass: 'text-3xl font-extrabold text-white tracking-normal drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]',
+          numberClass: 'text-3xl font-extrabold timer-glow-white-3d tracking-normal',
           labelClass: 'text-[9.5px] text-slate-300 font-medium tracking-wide',
           statusClass: 'bg-white/15 px-2 py-0.5 rounded-full text-[8.5px] border border-white/10 mt-1 text-white/90 inline-block'
         };
       case 'neon-glow':
         return {
-          container: 'bg-black/95 border border-[#FF007F]/40 p-3 rounded-xl text-white shadow-[0_0_20px_rgba(255,0,127,0.3)] text-center select-none w-[170px]',
-          numberClass: 'text-3xl font-black text-[#FF007F] drop-shadow-[0_0_12px_rgba(255,0,127,0.7)]',
+          container: 'bg-black/95 border border-[#FF007F]/40 p-3 rounded-xl text-white shadow-[0_0_20px_rgba(255,0,127,0.35)] text-center select-none w-[170px]',
+          numberClass: 'text-3xl font-black timer-glow-pink',
           labelClass: 'text-[9px] text-[#00F0FF] uppercase tracking-widest font-extrabold',
           statusClass: 'text-[#00F0FF] font-bold text-[8.5px] tracking-wide mt-1 animate-pulse inline-block'
         };
       case 'kawaii':
         return {
           container: 'bg-pink-50 border-2 border-pink-200 p-3 rounded-2xl text-pink-600 shadow-[0_4px_12px_rgba(244,63,94,0.1)] text-center select-none w-[170px]',
-          numberClass: 'text-3xl font-black text-pink-500 tracking-tight',
+          numberClass: 'text-3xl font-black timer-glow-pink tracking-tight',
           labelClass: 'text-[9.5px] text-pink-400 font-extrabold tracking-wide uppercase',
           statusClass: 'bg-pink-100/80 px-2 py-0.5 rounded-full text-[8.5px] text-pink-500 font-bold mt-1 inline-block'
         };
       case 'gaming-red':
         return {
-          container: 'bg-[#121214] border-l-4 border-red-600 p-3 text-white shadow-[0_4px_16px_rgba(0,0,0,0.7)] text-center select-none w-[170px]',
-          numberClass: 'text-3xl font-black text-red-500 tracking-widest font-mono',
+          container: 'bg-[#121214] border-l-4 border-red-650 p-3 text-white shadow-[0_4px_16px_rgba(0,0,0,0.7)] text-center select-none w-[170px]',
+          numberClass: 'text-3xl font-black timer-glow-pink tracking-widest font-mono', // fallback pink glow looks gorgeous on red
           labelClass: 'text-[9.5px] text-zinc-400 uppercase tracking-widest',
           statusClass: 'bg-red-950/60 text-red-400 border border-red-900/40 px-2 py-0.5 text-[8px] mt-1 font-mono inline-block'
         };
       case 'royal-gold':
         return {
           container: 'bg-amber-950/85 border-2 border-amber-500/60 p-3 rounded-lg text-amber-200 shadow-[0_4px_20px_rgba(217,119,6,0.2)] text-center select-none w-[170px]',
-          numberClass: 'text-3xl font-bold text-amber-400 tracking-normal',
+          numberClass: 'text-3xl font-bold timer-glow-orange-gold tracking-normal',
           labelClass: 'text-[9px] text-amber-500/85 uppercase tracking-wider',
           statusClass: 'bg-amber-900/40 text-amber-300 border border-amber-700/30 px-1.5 py-0.5 text-[8px] mt-1 inline-block'
         };
@@ -2355,48 +2584,58 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
     }
   };
 
+  const getTimerFontFamilyStyle = () => {
+    if (settings.timerFontFamily) {
+      return { fontFamily: `'${settings.timerFontFamily}', monospace, sans-serif` };
+    }
+    return settings.fontFamily ? { fontFamily: `'${settings.fontFamily}', monospace, sans-serif` } : {};
+  };
+
   const getTransparentTimerStyles = () => {
     const glow = settings.timerGlowColor || 'cyan';
     const size = settings.timerFontSize || 48;
     
-    let textShadow = '';
     let textColor = '';
     
     switch (glow) {
       case 'cyan':
-        textColor = 'text-cyan-400';
-        textShadow = '0 0 5px rgba(6, 182, 212, 0.95), 0 0 15px rgba(6, 182, 212, 0.65), 0 0 30px rgba(6, 182, 212, 0.35), 1px 1px 0px #000, 2px 2px 0px #000, 3px 3px 0px #000, 4px 4px 6px rgba(0,0,0,0.95)';
+        textColor = 'timer-glow-cyan';
         break;
       case 'pink':
-        textColor = 'text-fuchsia-400';
-        textShadow = '0 0 5px rgba(244, 63, 94, 0.95), 0 0 15px rgba(244, 63, 94, 0.65), 0 0 30px rgba(244, 63, 94, 0.35), 1px 1px 0px #000, 2px 2px 0px #000, 3px 3px 0px #000, 4px 4px 6px rgba(0,0,0,0.95)';
+        textColor = 'timer-glow-pink';
         break;
       case 'orange-gold':
-        textColor = 'text-amber-400';
-        textShadow = '0 0 5px rgba(245, 158, 11, 0.95), 0 0 15px rgba(245, 158, 11, 0.65), 0 0 30px rgba(245, 158, 11, 0.35), 1px 1px 0px #000, 2px 2px 0px #000, 3px 3px 0px #000, 4px 4px 6px rgba(0,0,0,0.95)';
+        textColor = 'timer-glow-orange-gold';
         break;
       case 'white-3d':
-        textColor = 'text-white';
-        textShadow = '1px 1px 0px #e2e8f0, -1px -1px 0px #475569, 1px 1px 0px #000, 2px 2px 0px #000, 3px 3px 0px #000, 4px 4px 0px #000, 5px 5px 0px #000, 6px 6px 0px #000, 7px 7px 12px rgba(0,0,0,0.95)';
+        textColor = 'timer-glow-white-3d';
         break;
       case 'green-matrix':
-        textColor = 'text-emerald-400';
-        textShadow = '0 0 5px rgba(16, 185, 129, 0.95), 0 0 15px rgba(16, 185, 129, 0.65), 0 0 30px rgba(16, 185, 129, 0.35), 1px 1px 0px #000, 2px 2px 0px #000, 3px 3px 0px #000, 4px 4px 6px rgba(0,0,0,0.95)';
+        textColor = 'timer-glow-green-matrix';
         break;
       case 'neon-purple':
-        textColor = 'text-fuchsia-400';
-        textShadow = '0 0 5px rgba(192, 38, 211, 0.95), 0 0 15px rgba(192, 38, 211, 0.65), 0 0 30px rgba(192, 38, 211, 0.35), 1px 1px 0px #000, 2px 2px 0px #000, 3px 3px 0px #000, 4px 4px 6px rgba(0,0,0,0.95)';
+        textColor = 'timer-glow-neon-purple';
+        break;
+      case 'crimson':
+        textColor = 'timer-glow-crimson';
+        break;
+      case 'voltage':
+        textColor = 'timer-glow-voltage';
+        break;
+      case 'cotton-candy':
+        textColor = 'timer-glow-cotton-candy';
+        break;
+      case 'platinum-diamond':
+        textColor = 'timer-glow-platinum-diamond';
         break;
       default:
-        textColor = 'text-cyan-400';
-        textShadow = '0 0 5px rgba(6, 182, 212, 0.95), 1px 1px 0px #000, 2px 2px 0px #000, 3px 3px 6px rgba(0,0,0,0.95)';
+        textColor = 'timer-glow-cyan';
     }
 
     return {
       style: {
         fontSize: `${size}px`,
-        textShadow,
-        fontFamily: settings.fontFamily ? `'${settings.fontFamily}', monospace` : 'monospace',
+        ...getTimerFontFamilyStyle()
       },
       className: `${textColor} font-black tracking-wider leading-none text-center select-none`
     };
@@ -2439,6 +2678,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       id="chat-overlay-root"
       style={settings.fontFamily ? { fontFamily: `'${settings.fontFamily}', var(--font-sans), sans-serif` } : {}}
     >
+
       {/* Floating CountDown Stream Timer */}
       {(settings.showTimer || settings.mode === 'timer_only') && (
         <div 
@@ -2454,8 +2694,14 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
             </div>
           ) : (
             <div className={getTimerStyles().container}>
-              <div className={getTimerStyles().labelClass}>⏱️ STREAM TIMER</div>
-              <div className={`${getTimerStyles().numberClass} leading-none my-1`}>
+              <div className={getTimerStyles().labelClass}>
+                <span className="mr-1">{settings.timerIcon !== undefined ? settings.timerIcon : '⏱️'}</span>
+                {settings.timerLabel !== undefined ? settings.timerLabel : 'STREAM TIMER'}
+              </div>
+              <div 
+                className={`${getTimerStyles().numberClass} leading-none my-1`}
+                style={getTimerFontFamilyStyle()}
+              >
                 {formatTimerString(timerLeft)}
               </div>
               {timerLeft === 0 ? (
@@ -2592,9 +2838,13 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
         </div>
       )}
 
-      {/* Top Center alert notifications banner overlay */}
+      {/* Dynamic Positioning alert notifications banner overlay */}
       {settings.mode !== 'chat_only' && settings.mode !== 'images_only' && settings.mode !== 'avatars' && settings.mode !== 'hearts_glass' && settings.mode !== 'timer_only' && settings.mode !== 'donate_goal' && settings.mode !== 'leaderboard' && (
-        <div className="absolute top-8 left-0 right-0 flex justify-center h-28 pointer-events-none z-20">
+        <div 
+          className={`absolute left-0 right-0 flex justify-center pointer-events-none z-50 duration-700 transition-all ${
+            settings.alertPosition === 'middle' ? 'top-1/2 -translate-y-1/2' : 'top-8 h-28'
+          }`}
+        >
           <AnimatePresence mode="wait">
             {activeAlert && (
             <motion.div
@@ -2613,6 +2863,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 flex-shrink-0 animate-bounce" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 flex-shrink-0" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 flex-shrink-0 fill-rose-500 text-rose-500" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 flex-shrink-0 text-yellow-500 animate-pulse" /> :
                       <Share2 className="w-5 h-5 flex-shrink-0" />
                     )}
                   </div>
@@ -2636,6 +2887,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-6 h-6 text-pink-500 flex-shrink-0" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-6 h-6 text-cyan-400 flex-shrink-0" /> :
                       activeAlert.type === 'like' ? <Heart className="w-6 h-6 text-red-500 flex-shrink-0 fill-red-500" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-6 h-6 text-yellow-400 flex-shrink-0 animate-pulse" /> :
                       <Share2 className="w-6 h-6 text-lime-400 flex-shrink-0" />
                     )}
                   </div>
@@ -2657,6 +2909,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 flex-shrink-0" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 flex-shrink-0" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 flex-shrink-0 fill-rose-400 text-rose-400" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 flex-shrink-0 text-amber-300 animate-pulse" /> :
                       <Share2 className="w-5 h-5 flex-shrink-0" />
                     )}
                   </div>
@@ -2677,6 +2930,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 flex-shrink-0" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 flex-shrink-0" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 flex-shrink-0 fill-amber-400" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 flex-shrink-0 text-amber-500 animate-pulse" /> :
                       <Share2 className="w-5 h-5 flex-shrink-0" />
                     )}
                   </div>
@@ -2697,6 +2951,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                     activeAlert.type === 'gift' ? <Gift className="w-4 h-4 text-yellow-400 flex-shrink-0" /> :
                     activeAlert.type === 'follow' ? <UserPlus className="w-4 h-4 text-blue-400 flex-shrink-0" /> :
                     activeAlert.type === 'like' ? <Heart className="w-4 h-4 text-green-400 flex-shrink-0" /> :
+                    activeAlert.type === 'donate_alert' ? <Coins className="w-4 h-4 text-amber-400 flex-shrink-0 animate-pulse" /> :
                     <Share2 className="w-4 h-4 text-purple-400 flex-shrink-0" />
                   )}
                   <p className="text-[12px] text-white font-mono uppercase tracking-wide">
@@ -2714,6 +2969,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 animate-bounce" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 fill-lime-400" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 text-lime-400 animate-pulse" style={{ imageRendering: 'pixelated' }} /> :
                       <Share2 className="w-5 h-5" />
                     )}
                   </div>
@@ -2736,6 +2992,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-fuchsia-400 animate-bounce" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-cyan-400" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 text-rose-500 fill-rose-500" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 text-fuchsia-400 animate-pulse" /> :
                       <Share2 className="w-5 h-5 text-purple-400" />
                     )}
                   </div>
@@ -2759,6 +3016,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-pink-400 animate-bounce" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-pink-500" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 fill-rose-400 text-rose-400" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 text-pink-400 animate-bounce" /> :
                       <Share2 className="w-5 h-5 text-pink-500" />
                     )}
                   </div>
@@ -2780,6 +3038,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-red-500 animate-bounce" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-red-400" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 text-red-500 fill-red-500" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 text-red-600 animate-pulse" /> :
                       <Share2 className="w-5 h-5 text-red-500" />
                     )}
                   </div>
@@ -2801,6 +3060,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-amber-500 animate-bounce" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-amber-400" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 fill-amber-500 text-amber-500" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 text-amber-300 animate-pulse" /> :
                       <Share2 className="w-5 h-5 text-amber-400" />
                     )}
                   </div>
@@ -2823,6 +3083,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-pink-400 animate-bounce" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-cyan-400" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 fill-rose-500 text-rose-500" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 text-pink-400 animate-pulse" /> :
                       <Share2 className="w-5 h-5 text-[#c084fc]" />
                     )}
                   </div>
@@ -2844,6 +3105,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-[#00f3ff] animate-bounce" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-[#00f3ff]" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 text-rose-500 fill-rose-500 animate-pulse" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 text-[#00f3ff] animate-pulse" /> :
                       <Share2 className="w-5 h-5 text-[#00f3ff]" />
                     )}
                   </div>
@@ -2865,6 +3127,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-yellow-500 animate-bounce" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-amber-400" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 fill-yellow-500 text-yellow-500" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 text-yellow-500 animate-pulse" /> :
                       <Share2 className="w-5 h-5 text-amber-400" />
                     )}
                   </div>
@@ -2886,6 +3149,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-[#c54b3c]" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-[#4a3b32]" /> :
                       activeAlert.type === 'like' ? <Heart className="w-5 h-5 text-[#c54b3c] fill-[#c54b3c]" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 text-[#c54b3c] animate-pulse" /> :
                       <Share2 className="w-5 h-5 text-[#4a3b32]" />
                     )}
                   </div>
@@ -2907,6 +3171,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       activeAlert.type === 'gift' ? <Gift className="w-4 h-4 flex-shrink-0" /> :
                       activeAlert.type === 'follow' ? <UserPlus className="w-4 h-4 flex-shrink-0" /> :
                       activeAlert.type === 'like' ? <Heart className="w-4 h-4 flex-shrink-0 fill-purple-400" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-4 h-4 flex-shrink-0 text-purple-400" /> :
                       <Share2 className="w-4 h-4 flex-shrink-0" />
                     )}
                   </div>
@@ -2914,6 +3179,155 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                     <h5 className="text-[10px] text-purple-400 font-semibold tracking-wide uppercase">กิจกรรมสตรีมสด</h5>
                     <p className="text-[13px] text-slate-100 font-bold">
                       @{activeAlert.nickname} <span className="text-slate-300 font-normal">{activeAlert.detailText}</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'pastel-candy' && (
+                <div className="relative bg-white/95 border-2 border-pink-200 px-6 py-4 rounded-2xl flex items-center gap-4 min-w-[325px] overflow-hidden shadow-[0_12px_32px_rgba(244,114,182,0.25)] ring-4 ring-purple-100/50">
+                  <div className="absolute top-0 right-0 w-8 h-8 bg-pink-100/30 rounded-full blur flex items-center justify-center opacity-70">
+                    <Sparkles className="w-4 h-4 text-pink-400 animate-spin" style={{ animationDuration: '6s' }} />
+                  </div>
+                  <div className="bg-pink-100/60 border border-pink-200 w-11 h-11 flex-shrink-0 flex items-center justify-center text-pink-500 overflow-hidden rounded-full shadow-inner">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-pink-500 animate-bounce" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-purple-500" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-5 h-5 fill-rose-500 text-rose-500" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 text-pink-500 animate-pulse" /> :
+                      <Share2 className="w-5 h-5 text-indigo-500" />
+                    )}
+                  </div>
+                  <div>
+                    <h5 className="font-sans text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-[10px] tracking-widest font-extrabold uppercase animate-pulse">✨ กิจกรรมพาสเทลใหม่!</h5>
+                    <p className="font-sans text-[13.5px] text-pink-950 font-extrabold mt-0.5">
+                      <strong className="text-pink-600">@{activeAlert.nickname}</strong> {activeAlert.detailText}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'multistream-k' && (
+                <div className="relative bg-[#09090b]/95 border border-white/10 px-6 py-4 rounded-[28px] flex items-center gap-4.5 min-w-[340px] shadow-[0_12px_40px_rgba(0,0,0,0.8)] ring-1 ring-white/10 hover:scale-102 transition-transform duration-300 pointer-events-auto">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
+                  
+                  {/* Avatar & Platform badge */}
+                  <div className="relative flex-shrink-0">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-11 h-11 rounded-full border border-white/20 object-cover shadow-md bg-zinc-900" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full bg-indigo-950 flex items-center justify-center text-white text-md font-bold shadow-inner">
+                        {activeAlert.nickname.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="absolute -bottom-1 -right-1 w-5.5 h-5.5 rounded-full bg-indigo-600 text-white text-[9px] font-black border-2 border-[#09090b] shadow-md flex items-center justify-center animate-pulse">
+                      ★
+                    </span>
+                  </div>
+
+                  {/* Text details */}
+                  <div className="flex-1 min-w-0 pr-2">
+                    <div className="inline-flex items-center gap-1.5 bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 text-[9px] font-mono tracking-widest font-extrabold uppercase px-2.5 py-0.5 rounded-full mb-1">
+                      📱 MULTISTREAM K ALERT
+                    </div>
+                    <p className="font-sans text-[14px] text-zinc-100 font-extrabold leading-normal mt-0.5">
+                      <span className="text-indigo-400 font-black">@{activeAlert.nickname}</span> {activeAlert.detailText}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'aesthetic-sakura' && (
+                <div className="relative bg-[#ffe3ec]/95 border-4 border-white px-8 py-5.5 rounded-[40px] flex items-center gap-5 min-w-[340px] shadow-[0_12px_36px_rgba(244,114,182,0.35)] hover:scale-103 transition-all duration-300 ring-4 ring-[#ff9fbd]/40">
+                  
+                  {/* Left Cat Ear */}
+                  <div className="absolute -top-4 left-6 w-8 h-8 bg-[#ffe3ec]/95 border-t-4 border-l-4 border-r-4 border-white rounded-tl-[16px] rounded-br-[4px] rotate-[10deg] shadow-[-2px_-2px_4px_rgba(244,114,182,0.15)] flex items-center justify-center">
+                    <div className="w-4 h-4 bg-[#ff8fa3] rounded-tl-[10px] rounded-br-[2px] rotate-[-5deg]" />
+                  </div>
+                  
+                  {/* Right Cat Ear */}
+                  <div className="absolute -top-4 right-6 w-8 h-8 bg-[#ffe3ec]/95 border-t-4 border-l-4 border-r-4 border-white rounded-tr-[16px] rounded-bl-[4px] rotate-[-10deg] shadow-[2px_-2px_4px_rgba(244,114,182,0.15)] flex items-center justify-center">
+                    <div className="w-4 h-4 bg-[#ff8fa3] rounded-tr-[10px] rounded-bl-[2px] rotate-[5deg]" />
+                  </div>
+
+                  {/* Cute Sakura Petals floating around in background */}
+                  <div className="absolute top-1 left-2 w-3 h-1.5 bg-[#ffb3c1]/40 rounded-full rotate-45 pointer-events-none animate-pulse" />
+                  <div className="absolute bottom-2 right-3 w-4 h-2 bg-[#ffb3c1]/50 rounded-full -rotate-12 pointer-events-none animate-pulse" />
+                  <div className="absolute top-1 right-12 w-2.5 h-1.5 bg-white/80 rounded-full rotate-12 pointer-events-none" />
+
+                  {/* Avatar / Icon Container styled as an adorable kitten paw */}
+                  <div className="relative bg-white border-2 border-[#ff8fa3] w-14 h-14 flex-shrink-0 flex items-center justify-center rounded-full overflow-hidden shadow-[0_4px_10px_rgba(244,114,182,0.25)] ring-4 ring-[#ffccd5]">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-7 h-7 text-[#ff4d6d] animate-[bounce_1.2s_infinite]" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-7 h-7 text-[#ff4d6d] animate-pulse" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-7 h-7 text-[#ff4d6d] fill-[#ff4d6d] animate-pulse" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-7 h-7 text-[#ff4d6d] animate-pulse" /> :
+                      <Share2 className="w-7 h-7 text-[#ff4d6d]" />
+                    )}
+                  </div>
+                  
+                  {/* Details Area */}
+                  <div className="flex-1 min-w-0 pr-2">
+                    {/* Pink/white cute badge labeling the alert action */}
+                    <div className="inline-flex items-center gap-1 bg-[#ffb3c1] text-white text-[9.5px] font-sans tracking-[0.2em] font-extrabold uppercase px-3 py-0.5 rounded-full mb-1 border border-white/60 shadow-sm">
+                      ✨ Nya~ Alert!
+                    </div>
+                    <p className="font-sans text-[15px] text-[#591e31] font-extrabold leading-normal mt-0.5">
+                      <span className="text-[#ff4d6d] drop-shadow-[0_1.5px_3px_rgba(255,77,109,0.15)] font-black select-all cursor-pointer">@{activeAlert.nickname}</span> {activeAlert.detailText}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'aesthetic-snow' && (
+                <div className="relative bg-[#0f0c1b]/95 border-2 border-slate-800/80 px-6 py-4 rounded-[28px] flex items-center gap-4.5 min-w-[340px] shadow-[0_12px_40px_rgba(15,12,27,0.7)] hover:scale-102 transition-transform duration-300">
+                  <div className="absolute top-0 right-0 w-12 h-12 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
+                  <div className="relative bg-zinc-950/60 border border-zinc-700/40 w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-full overflow-hidden shadow-[0_4px_10px_rgba(0,0,0,0.4)] ring-2 ring-violet-500/35">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-6 h-6 text-pink-500 animate-bounce" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-6 h-6 text-cyan-400" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-6 h-6 text-rose-500 fill-rose-500" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-6 h-6 text-violet-500 animate-pulse" /> :
+                      <Share2 className="w-6 h-6 text-violet-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h5 className="font-sans text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-[#ff5e7e] text-[9.5px] tracking-[0.25em] font-extrabold uppercase">
+                      COSMIC CELESTIAL SYNC
+                    </h5>
+                    <p className="font-sans text-[14px] text-zinc-100 font-bold mt-1 leading-normal">
+                      <span className="text-[#ff5e7e] font-extrabold drop-shadow-[0_2px_8px_rgba(255,15,126,0.25)] select-all cursor-pointer">@{activeAlert.nickname}</span> {activeAlert.detailText}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {settings.theme === 'cozy-cloud' && (
+                <div className="relative bg-[#f5f8ff]/95 border border-indigo-200/60 px-6 py-4 rounded-[22px] flex items-center gap-4 min-w-[325px] overflow-hidden shadow-[0_12px_32px_rgba(147,197,253,0.32)]">
+                  <div className="absolute -top-10 -left-10 w-24 h-24 bg-blue-300/10 rounded-full blur-2xl animate-pulse" />
+                  <div className="bg-[#e0e8ff] border border-indigo-200 w-11 h-11 flex-shrink-0 flex items-center justify-center text-indigo-500 overflow-hidden rounded-full">
+                    {settings.showAvatars && activeAlert.profilePictureUrl ? (
+                      <img src={activeAlert.profilePictureUrl} alt="" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                    ) : (
+                      activeAlert.type === 'gift' ? <Gift className="w-5 h-5 text-blue-500 animate-bounce" /> :
+                      activeAlert.type === 'follow' ? <UserPlus className="w-5 h-5 text-indigo-500" /> :
+                      activeAlert.type === 'like' ? <Heart className="w-5 h-5 fill-indigo-500 text-indigo-500" /> :
+                      activeAlert.type === 'donate_alert' ? <Coins className="w-5 h-5 text-blue-500 animate-pulse" /> :
+                      <Share2 className="w-5 h-5 text-blue-500" />
+                    )}
+                  </div>
+                  <div>
+                    <h5 className="font-sans text-indigo-600 text-[10.5px] tracking-wider font-extrabold uppercase flex items-center gap-1">
+                      <span>☁️</span> Cozy Dream Event
+                    </h5>
+                    <p className="font-sans text-[13.5px] text-slate-800 font-bold mt-0.5">
+                      <strong className="text-indigo-600">@{activeAlert.nickname}</strong> {activeAlert.detailText}
                     </p>
                   </div>
                 </div>
@@ -3246,7 +3660,7 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                       <Camera className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <h5 className="text-[9px] text-purple-400 font-extrabold tracking-wide uppercase">แชร์รูปภาพสตรีม</h5>
+                      <h5 className="text-[9px] text-[#A970FF] font-extrabold tracking-wide uppercase">แชร์รูปภาพสตรีม</h5>
                       <span className="text-[11.5px] font-bold text-white block truncate">@{imageShareAlert.nickname}</span>
                     </div>
                   </div>
@@ -3254,7 +3668,109 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                     <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   {imageShareAlert.comment && (
-                    <p className="text-[11px] text-zinc-300 font-normal leading-normal py-1 px-1.5 bg-zinc-900 rounded font-sans italic border-l-2 border-zinc-700 truncate">
+                    <p className="text-[11px] text-zinc-350 font-normal leading-normal py-1 px-1.5 bg-zinc-900 rounded font-sans italic border-l-2 border-zinc-700 truncate">
+                      "{imageShareAlert.comment}"
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {settings.theme === 'aesthetic-sakura' && (
+                <div className="relative bg-[#ffe3ec]/95 border-4 border-white p-4.5 rounded-[36px] shadow-[0_12px_36px_rgba(244,114,182,0.3)] flex flex-col gap-3 w-[270px] overflow-hidden ring-4 ring-[#ff9fbd]/30">
+                  {/* Left Cat Ear */}
+                  <div className="absolute -top-3 left-6 w-6 h-6 bg-[#ffe3ec]/95 border-t-4 border-l-4 border-r-4 border-white rounded-tl-[12px] rounded-br-[3px] rotate-[10deg] shadow-[-2px_-2px_4px_rgba(244,114,182,0.1)] flex items-center justify-center">
+                    <div className="w-3 h-3 bg-[#ff8fa3] rounded-tl-[8px] rounded-br-[2px] rotate-[-5deg]" />
+                  </div>
+                  
+                  {/* Right Cat Ear */}
+                  <div className="absolute -top-3 right-6 w-6 h-6 bg-[#ffe3ec]/95 border-t-4 border-l-4 border-r-4 border-white rounded-tr-[12px] rounded-bl-[3px] rotate-[-10deg] shadow-[2px_-2px_4px_rgba(244,114,182,0.1)] flex items-center justify-center">
+                    <div className="w-3 h-3 bg-[#ff8fa3] rounded-tr-[8px] rounded-bl-[2px] rotate-[5deg]" />
+                  </div>
+
+                  <div className="flex items-center gap-2.5 border-b border-[#ffccd5] pb-2.5">
+                    <div className="bg-white p-1.5 rounded-full text-[#ff4d6d] border border-[#ff8fa3] ring-2 ring-[#ffccd5]">
+                      <Camera className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h5 className="font-sans text-transparent bg-clip-text bg-gradient-to-r from-[#ff4d6d] via-[#ff758f] to-[#ff8fa3] text-[9px] tracking-[0.2em] font-extrabold uppercase mb-0.5">🌸 Neko Photo Share</h5>
+                      <span className="text-[12px] font-extrabold text-[#591e31] block truncate">@{imageShareAlert.nickname}</span>
+                    </div>
+                  </div>
+                  <div className="relative rounded-[22px] overflow-hidden aspect-video bg-white border border-[#ffccd5] shadow-[0_4px_12px_rgba(244,114,182,0.15)]">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  {imageShareAlert.comment && (
+                    <p className="text-[11px] text-[#591e31] font-bold leading-normal py-1.5 px-3 bg-white/70 rounded-xl border border-[#ffccd5]/50 font-sans italic truncate">
+                      "{imageShareAlert.comment}"
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {settings.theme === 'pastel-candy' && (
+                <div className="relative bg-white/95 border-2 border-pink-200 p-4 rounded-2xl shadow-[0_12px_36px_rgba(244,114,182,0.22)] ring-4 ring-purple-100/50 flex flex-col gap-3 w-[260px] overflow-hidden animate-[pulse_3s_infinite]">
+                  <div className="absolute top-0 right-0 w-8 h-8 flex items-center justify-center opacity-60">
+                    <Sparkles className="w-3.5 h-3.5 text-pink-400 animate-pulse" />
+                  </div>
+                  <div className="flex items-center gap-2 border-b border-pink-100 pb-2">
+                    <div className="bg-pink-100/60 p-1.5 rounded-full text-pink-500">
+                      <Camera className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h5 className="text-[9px] font-sans font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-500 tracking-wider uppercase">✨ สตอรี่พาสเทลแชร์รูป ✨</h5>
+                      <span className="text-[11.5px] font-extrabold text-pink-950 block truncate">@{imageShareAlert.nickname}</span>
+                    </div>
+                  </div>
+                  <div className="relative rounded-xl overflow-hidden aspect-video bg-pink-50 border border-pink-100 shadow-sm">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  {imageShareAlert.comment && (
+                    <p className="text-[11px] text-pink-950 font-bold leading-normal py-1 px-1.5 bg-pink-50/50 rounded-lg border border-pink-100/50 font-sans italic truncate">
+                      "{imageShareAlert.comment}"
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {settings.theme === 'aesthetic-snow' && (
+                <div className="relative bg-[#0f0c1b]/95 border-2 border-slate-800/80 p-4.5 rounded-[28px] shadow-[0_12px_40px_rgba(15,12,27,0.7)] flex flex-col gap-3 w-[270px] overflow-hidden">
+                  <div className="absolute -top-12 -left-12 w-28 h-28 bg-[#ff5e7e]/10 rounded-full blur-2xl pointer-events-none" />
+                  <div className="flex items-center gap-2.5 border-b border-zinc-800/60 pb-2.5">
+                    <div className="bg-zinc-950/60 p-2 rounded-full text-cyan-400 border border-zinc-800 ring-2 ring-violet-500/35">
+                      <Camera className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h5 className="font-sans text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-[#ff5e7e] text-[9.5px] tracking-[0.2em] font-extrabold uppercase mb-0.5">📸 COSMIC PHOTO SHARE</h5>
+                      <span className="text-[12.5px] font-extrabold text-white block truncate">@{imageShareAlert.nickname}</span>
+                    </div>
+                  </div>
+                  <div className="relative rounded-[20px] overflow-hidden aspect-video bg-zinc-950 border border-zinc-800 shadow-[0_4px_15px_rgba(0,0,0,0.5)]">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  {imageShareAlert.comment && (
+                    <p className="text-[11.5px] text-zinc-300 font-medium leading-normal py-1.5 px-3 bg-zinc-950/50 rounded-xl border border-zinc-800/60 font-sans italic truncate">
+                      "{imageShareAlert.comment}"
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {settings.theme === 'cozy-cloud' && (
+                <div className="relative bg-[#f5f8ff]/95 border border-indigo-200/60 p-4 rounded-[22px] shadow-[0_12px_36px_rgba(147,197,253,0.3)] flex flex-col gap-3 w-[260px] overflow-hidden">
+                  <div className="flex items-center gap-2 border-b border-indigo-100 pb-2">
+                    <div className="bg-indigo-100 p-1.5 rounded-full text-indigo-500">
+                      <Camera className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h5 className="text-[9px] font-sans font-extrabold text-indigo-500 tracking-wider uppercase">⛅ Cozy Cloud Photo</h5>
+                      <span className="text-[11.5px] font-bold text-slate-800 block truncate">@{imageShareAlert.nickname}</span>
+                    </div>
+                  </div>
+                  <div className="relative rounded-[16px] overflow-hidden aspect-video bg-[#eaeffc] border border-indigo-100">
+                    <img src={imageShareAlert.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  {imageShareAlert.comment && (
+                    <p className="text-[11px] text-slate-600 font-semibold leading-normal py-1 px-1.5 bg-white/50 rounded-lg border border-indigo-50/50 font-sans italic truncate animate-pulse">
                       "{imageShareAlert.comment}"
                     </p>
                   )}
@@ -3268,8 +3784,12 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
       {/* Primary chat scroll container - bottom aligned */}
       {settings.mode !== 'images_only' && settings.mode !== 'alerts_only' && settings.mode !== 'avatars' && settings.mode !== 'hearts_glass' && settings.mode !== 'timer_only' && settings.mode !== 'donate_goal' && settings.mode !== 'leaderboard' && (
         <div 
-          className="w-full max-w-md flex flex-col pointer-events-none self-start relative z-20 overflow-y-auto"
-          style={{ fontSize: `${settings.fontSize}px`, maxHeight: '75vh' }}
+          className={`pointer-events-none relative z-20 overflow-x-auto overflow-y-hidden ${
+            settings.layoutOrientation === 'horizontal'
+              ? 'w-full max-w-none flex flex-row items-center gap-3 py-2 scrollbar-none h-32 self-end'
+              : 'w-full max-w-md flex flex-col self-start overflow-y-auto'
+          }`}
+          style={{ fontSize: `${settings.fontSize}px`, maxHeight: settings.layoutOrientation === 'horizontal' ? '128px' : '75vh' }}
           id="chat-scroller"
         >
           <AnimatePresence initial={false}>
@@ -3277,6 +3797,403 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
               const hasPfp = settings.showAvatars && !!msg.profilePictureUrl;
               const t = getThemeClasses(msg);
               const isHighlighted = msg.comment && settings.highlightKeywords.some(kw => msg.comment?.toLowerCase().includes(kw.toLowerCase()));
+
+              if (settings.theme === 'multistream-k') {
+                const isSpecial = msg.type !== 'chat';
+                const platformId = Math.abs(msg.uniqueId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 4;
+
+                let platformColor = 'bg-[#6441a5]';
+                let platformLabel = 'T';
+                let platformName = 'Twitch';
+                if (platformId === 1) {
+                  platformColor = 'bg-[#53fc18] text-zinc-950';
+                  platformLabel = 'K';
+                  platformName = 'Kick';
+                } else if (platformId === 2) {
+                  platformColor = 'bg-[#ef4444] text-white';
+                  platformLabel = 'Y';
+                  platformName = 'YouTube';
+                } else if (platformId === 3) {
+                  platformColor = 'bg-black text-white border border-zinc-850';
+                  platformLabel = 'TT';
+                  platformName = 'TikTok';
+                }
+
+                return (
+                  <motion.div
+                    key={msg.id}
+                    layout
+                    variants={getAnimationVariants()}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={{ duration: 0.28, layout: { type: 'spring', stiffness: 450, damping: 40 } }}
+                    id={`chat-msg-${msg.id}`}
+                    className={`select-none px-1 flex-shrink-0 flex items-center ${
+                      settings.layoutOrientation === 'horizontal' ? 'h-full' : 'mb-3.5'
+                    }`}
+                  >
+                    <div className={`relative flex items-center gap-2.5 ${
+                      settings.layoutOrientation === 'horizontal' ? 'w-auto max-w-[380px]' : 'w-full max-w-[350px]'
+                    }`}>
+                      
+                      {/* Left Side avatar or platform circle badge indicator */}
+                      <div className="relative flex-shrink-0">
+                        {hasPfp ? (
+                          <img 
+                            src={msg.profilePictureUrl} 
+                            alt=""
+                            referrerPolicy="no-referrer"
+                            className="w-10 h-10 rounded-full border border-white/20 object-cover shadow-sm bg-zinc-900"
+                          />
+                        ) : (
+                          <div 
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[12px] font-extrabold shadow-inner"
+                            style={{ backgroundColor: getUserColor(msg.uniqueId) }}
+                          >
+                            {msg.nickname.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        {/* Overlapping Platform badge */}
+                        <span className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[8.5px] font-black border-2 border-[#18181b] shadow-md ${platformColor}`} title={platformName}>
+                          {platformLabel}
+                        </span>
+                      </div>
+
+                      {/* Bubble Message Capsule */}
+                      <div className={`p-3 px-4 rounded-[22px] shadow-[0_4px_12px_rgba(0,0,0,0.35)] border transition-all duration-200 ${
+                        isHighlighted 
+                          ? 'bg-rose-950/80 border-rose-500/30 shadow-[0_4px_22px_rgba(244,63,94,0.18)] animate-pulse' 
+                          : 'bg-zinc-950/85 border-white/5 hover:border-white/10'
+                      }`}>
+                        
+                        {/* User friendly nickname & handle */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-white font-black text-[12px] tracking-wide font-sans">
+                            {msg.nickname}
+                          </span>
+                          <span className="text-zinc-500 text-[9px] font-mono leading-none font-bold">
+                            @{msg.uniqueId}
+                          </span>
+
+                          {/* Moderator and VIP badges */}
+                          {settings.showBadges && (
+                            <>
+                              {msg.isModerator && (
+                                <span className="bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[8px] px-1.5 py-0.5 rounded-full font-black flex items-center gap-0.5 shadow-sm font-sans">
+                                  <Shield className="w-2.5 h-2.5" /> MOD
+                                </span>
+                              )}
+                              {msg.isSubscriber && (
+                                <span className="bg-pink-500/20 border border-pink-400/30 text-pink-300 text-[8px] px-1.5 py-0.5 rounded-full font-black flex items-center gap-0.5 shadow-sm font-sans">
+                                  <Star className="w-2.5 h-2.5 text-yellow-300 fill-yellow-300" /> SUB
+                                </span>
+                              )}
+                              {msg.isVip && (
+                                <span className="bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[8px] px-1.5 py-0.5 rounded-full font-black flex items-center gap-0.5 shadow-sm font-sans">
+                                  <Award className="w-2.5 h-2.5 text-yellow-300" /> VIP
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </div>
+
+                        {/* Comment text body / Alerts */}
+                        <div className="font-sans leading-relaxed text-[13px] text-zinc-100 break-words mt-0.5 select-text">
+                          {msg.type === 'chat' ? (
+                            <p className="font-semibold">{msg.comment}</p>
+                          ) : msg.type === 'gift' ? (
+                            <div className="flex items-center gap-1.5 text-amber-400 bg-amber-950/20 border border-amber-500/10 px-2 py-0.5 rounded-lg inline-flex mt-0.5">
+                              {msg.giftIcon ? (
+                                <img src={msg.giftIcon} alt="" className="w-5 h-5 flex-shrink-0" referrerPolicy="no-referrer" />
+                              ) : (
+                                <Gift className="w-3.5 h-3.5 flex-shrink-0 animate-bounce text-amber-400" />
+                              )}
+                              <span className="font-extrabold text-[12px]">
+                                ส่งของขวัญ {msg.giftName} <strong className="text-amber-300 text-[13.5px]">x{msg.repeatCount}</strong> ชิ้น!
+                              </span>
+                            </div>
+                          ) : msg.type === 'follow' ? (
+                            <span className="text-cyan-400 font-extrabold flex items-center gap-1 text-[12px] mt-0.5">
+                              <UserPlus className="w-3.5 h-3.5 flex-shrink-0" /> ได้กดติดตามสตรีมสดแล้ว!
+                            </span>
+                          ) : msg.type === 'like' ? (
+                            <span className="text-rose-400 font-extrabold flex items-center gap-1 text-[12px] mt-0.5">
+                              <Heart className="w-3.5 h-3.5 flex-shrink-0 fill-rose-500 text-rose-500" /> ถูกใจสตรีมแล้ว (x{msg.likeCount})!
+                            </span>
+                          ) : msg.type === 'donate_alert' ? (
+                            <div className="flex flex-col gap-1 w-full bg-amber-500/10 border border-amber-500/20 p-2 rounded-lg text-amber-200 mt-0.5">
+                              <span className="text-amber-400 font-extrabold flex items-center gap-1.5 self-start text-[12px]">
+                                <Coins className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
+                                โอนสนับสนุน <strong className="text-white bg-amber-600/35 px-1 py-0.5 rounded font-mono text-[12px]">฿{msg.amount || 0}</strong> บาท!
+                              </span>
+                              {msg.comment && <p className="text-zinc-200 text-[11.5px] italic pl-3.5 mt-0.5 border-l border-amber-500/30 font-medium leading-normal">"{msg.comment}"</p>}
+                            </div>
+                          ) : (
+                            <span className="text-lime-400 font-extrabold flex items-center gap-1 text-[12px] mt-0.5">
+                              <Share2 className="w-3.5 h-3.5 flex-shrink-0" /> ได้ช่วยแชร์สตรีมแล้ว!
+                            </span>
+                          )}
+                        </div>
+
+                      </div>
+
+                    </div>
+                  </motion.div>
+                );
+              }
+
+              if (settings.theme === 'aesthetic-sakura') {
+                const isSpecial = msg.type !== 'chat';
+                
+                return (
+                  <motion.div
+                    key={msg.id}
+                    layout
+                    variants={getAnimationVariants()}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={{ duration: 0.3, layout: { type: 'spring', stiffness: 450, damping: 40 } }}
+                    id={`chat-msg-${msg.id}`}
+                    className="mb-4 select-none px-1"
+                  >
+                    <div className="relative flex flex-col items-start w-full max-w-[340px]">
+                      
+                      {/* Event/Alert styling: pink glow pill container */}
+                      {isSpecial ? (
+                        <div className="relative bg-gradient-to-r from-[#ff8fa3] to-[#ff4d6d] border-2 border-white px-5 py-2.5 rounded-[22px] shadow-[0_8px_20px_rgba(244,114,182,0.3)] flex items-center gap-2.5 text-white w-full overflow-hidden">
+                          {/* Inner soft glow */}
+                          <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
+
+                          {/* Left Cat Ear */}
+                          <div className="absolute -top-[10px] left-4 w-5 h-5 bg-[#ff8fa3] border-t-2 border-l-2 border-r-2 border-white rounded-tl-[10px] rounded-br-[2px] rotate-[10deg] flex items-center justify-center">
+                            <div className="w-2.5 h-2.5 bg-[#ffa4b6] rounded-tl-[6px] rounded-br-[2px]" />
+                          </div>
+                          
+                          {/* Right Cat Ear */}
+                          <div className="absolute -top-[10px] right-4 w-5 h-5 bg-[#ff4d6d] border-t-2 border-l-2 border-r-2 border-white rounded-tr-[10px] rounded-bl-[2px] rotate-[-10deg] flex items-center justify-center">
+                            <div className="w-2.5 h-2.5 bg-[#ffa4b6] rounded-tr-[6px] rounded-bl-[2px]" />
+                          </div>
+
+                          {/* Optional avatar inside event pill */}
+                          {hasPfp && (
+                            <img 
+                              src={msg.profilePictureUrl} 
+                              alt=""
+                              referrerPolicy="no-referrer"
+                              className="w-7 h-7 rounded-full border-2 border-white object-cover shadow-sm bg-zinc-850 flex-shrink-0" 
+                            />
+                          )}
+
+                          <div className="flex-1 min-w-0 font-sans text-xs font-extrabold pr-1">
+                            <span className="text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.2)]">@{msg.nickname}</span>{' '}
+                            {msg.type === 'gift' ? (
+                              <span className="text-[#ffe3ec] font-bold">
+                                ส่งของขวัญ {msg.giftName} <strong className="text-white text-[13px] font-black underline bg-white/20 px-1 py-0.5 rounded ml-0.5">x{msg.repeatCount}</strong>!
+                              </span>
+                            ) : msg.type === 'follow' ? (
+                              <span className="text-[#ffe3ec] font-medium">กดติดตามแล้ว! 💖</span>
+                            ) : msg.type === 'like' ? (
+                              <span className="text-[#ffe3ec] font-medium">ถูกใจไลฟ์สด (x{msg.likeCount})! 💕</span>
+                            ) : msg.type === 'donate_alert' ? (
+                              <span className="text-[#ffe3ec] font-bold flex flex-col gap-1 w-full mt-0.5">
+                                <span className="flex items-center gap-1">🪙 โดเนทสนับสนุน <strong className="bg-white/20 text-white font-mono text-[13px] font-black px-1.5 py-0.5 rounded shadow-sm">฿{msg.amount || 0}</strong> บาท!</span>
+                                {msg.comment && <span className="text-white/90 text-[11.5px] italic font-semibold font-sans mt-0.5 bg-black/15 border border-white/10 px-2 py-1 rounded block leading-tight">"{msg.comment}"</span>}
+                              </span>
+                            ) : (
+                              <span className="text-[#ffe3ec] font-medium">แชร์ไลฟ์สดแล้ว! 📢</span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        /* Normal Chat Message: translucent box with cat ears name label */
+                        <div className="relative pt-3 w-full">
+                          
+                          {/* Name Label Container styled with Cat Ears on top of the Message Box */}
+                          <div className="absolute top-0.5 left-4 flex items-center gap-1.5 z-10">
+                            
+                            {/* Left Ear */}
+                            <div className="absolute -top-3 left-2 w-4 h-4 bg-white border-t-2 border-l-2 border-r-2 border-[#ff8fa3] rounded-tl-[8px] rotate-[10deg]" />
+                            <div className="absolute -top-2.5 left-[11px] w-1.5 h-1.5 bg-[#ffccd5] rounded-tl-[4px] rotate-[10deg]" />
+                            
+                            {/* Right Ear */}
+                            <div className="absolute -top-3 left-[56px] w-4 h-4 bg-white border-t-2 border-l-2 border-r-2 border-[#ff8fa3] rounded-tr-[8px] rotate-[-10deg]" />
+                            <div className="absolute -top-2.5 left-[61px] w-1.5 h-1.5 bg-[#ffccd5] rounded-tr-[4px] rotate-[-10deg]" />
+
+                            <div className="px-3 py-0.5 bg-white border border-[#ff8fa3] rounded-full shadow-sm flex items-center gap-1">
+                              {hasPfp && (
+                                <img 
+                                  src={msg.profilePictureUrl} 
+                                  alt=""
+                                  referrerPolicy="no-referrer"
+                                  className="w-3.5 h-3.5 rounded-full object-cover flex-shrink-0" 
+                                />
+                              )}
+                              <span className="text-[#591e31] font-black text-[10.5px] font-sans tracking-wide">
+                                {msg.nickname}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Message Body Box */}
+                          <div className="relative bg-[#ffffff]/90 border border-[#ffccd5] px-4.5 pb-3.5 pt-5 rounded-[22px] shadow-[0_5px_15px_rgba(244,114,182,0.12)] w-full">
+                            {/* Cute Whiskers decoration under the name tag */}
+                            <div className="absolute top-1.5 right-4 flex gap-0.5 text-[#ff8fa3] text-[8px] select-none font-mono opacity-60">
+                              ฅ•ω•ฅ
+                            </div>
+
+                            <p className="text-[#591e31] font-bold text-[13px] leading-relaxed font-sans">
+                              {msg.comment}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              }
+
+              if (settings.theme === 'aesthetic-snow') {
+                const platformId = Math.abs(msg.uniqueId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 4;
+                const nicknameBg = getSnowNicknameColor(msg.uniqueId);
+
+                return (
+                  <motion.div
+                    key={msg.id}
+                    layout
+                    variants={getAnimationVariants()}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={{ duration: 0.3, layout: { type: 'spring', stiffness: 450, damping: 40 } }}
+                    id={`chat-msg-${msg.id}`}
+                    className="mb-3.5 select-none px-1"
+                  >
+                    <div className="flex flex-col gap-2 items-start w-full">
+                      
+                      {/* Name & Badge Row */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {hasPfp && (
+                          <div className="relative">
+                            <img 
+                              src={msg.profilePictureUrl} 
+                              alt=""
+                              referrerPolicy="no-referrer"
+                              className="w-6 h-6 rounded-full ring-2 ring-violet-500/35 object-cover shadow-sm bg-zinc-800" 
+                            />
+                          </div>
+                        )}
+
+                        {/* Name tag pill */}
+                        <div className={`px-3.5 py-1 rounded-full flex items-center gap-1.5 shadow-[0_3px_8px_rgba(0,0,0,0.15)] ${nicknameBg} duration-200 hover:scale-105 select-all cursor-pointer`}>
+                          <span className="text-white font-[950] text-[12px] font-sans tracking-wide drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.32)]">
+                            {msg.nickname}
+                          </span>
+                          <span className="text-white/60 text-[9px] font-mono leading-none font-bold">
+                            @{msg.uniqueId}
+                          </span>
+                        </div>
+
+                        {/* Social platform tag */}
+                        {platformId === 0 && (
+                          <span className="bg-[#6441a5]/90 text-white text-[8.5px] px-2 py-0.5 rounded-full font-black flex items-center gap-1 shadow-sm border border-purple-500/30 tracking-wider font-mono">
+                            <span className="w-1.5 h-1.5 rounded-full bg-purple-300 animate-pulse" />
+                            {msg.isSubscriber ? 'SUB' : 'TWITCH'}
+                          </span>
+                        )}
+                        {platformId === 1 && (
+                          <span className="bg-[#53fc18]/90 text-zinc-950 text-[8.5px] px-2 py-0.5 rounded-full font-black flex items-center gap-1 shadow-sm border border-emerald-400/30 tracking-wider font-mono">
+                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 animate-pulse" />
+                            KICK
+                          </span>
+                        )}
+                        {platformId === 2 && (
+                          <span className="bg-[#ef4444]/90 text-white text-[8.5px] px-2 py-0.5 rounded-full font-black flex items-center gap-1 shadow-sm border border-rose-400/30 tracking-wider font-mono">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            YOUTUBE
+                          </span>
+                        )}
+                        {platformId === 3 && (
+                          <span className="bg-black/95 text-white text-[8.5px] px-2.5 py-0.5 rounded-full font-black flex items-center gap-1 shadow-sm border border-cyan-400/40 tracking-wider font-mono">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#fe2c55] animate-[ping_1.5s_infinite_ease-out]" />
+                            TIKTOK
+                          </span>
+                        )}
+
+                        {/* Badges */}
+                        {settings.showBadges && (
+                          <>
+                            {msg.isModerator && (
+                              <span className="bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-0.5 shadow-sm">
+                                <Shield className="w-3 h-3 text-emerald-300" />
+                                <span>MOD</span>
+                              </span>
+                            )}
+                            {msg.isSubscriber && platformId !== 0 && (
+                              <span className="bg-pink-500/25 border border-pink-400/30 text-pink-300 text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-0.5 shadow-sm">
+                                <Star className="w-3 h-3 text-yellow-300 fill-yellow-300" />
+                                <span>SUB</span>
+                              </span>
+                            )}
+                            {msg.isVip && (
+                              <span className="bg-amber-500/20 border border-yellow-400/30 text-amber-300 text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-0.5 shadow-sm">
+                                <Award className="w-3 h-3 text-yellow-300" />
+                                <span>VIP</span>
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Text content card capsule */}
+                      <div className="relative w-full">
+                        <div className={`p-3 px-4.5 rounded-[22px] rounded-tl-xs text-[13px] font-bold leading-relaxed text-zinc-100 select-text break-words tracking-wide backdrop-blur-md shadow-[0_5px_15px_rgba(0,0,0,0.38)] duration-200 transition-all ${
+                          isHighlighted 
+                            ? 'bg-rose-950/75 border border-rose-500/25 text-rose-150 shadow-[0_5px_22px_rgba(244,63,94,0.22)] animate-pulse' 
+                            : 'bg-zinc-950/65 border border-zinc-900/40 hover:border-zinc-800/50'
+                        }`}>
+                          {msg.type === 'chat' ? (
+                            <p className="font-semibold">{msg.comment}</p>
+                          ) : msg.type === 'gift' ? (
+                            <div className="flex items-center gap-1 bg-amber-900/10 text-amber-400 border border-amber-500/10 px-1.5 py-0.5 rounded inline-flex">
+                              {msg.giftIcon ? (
+                                <img src={msg.giftIcon} alt="" className="w-5 h-5 flex-shrink-0" referrerPolicy="no-referrer" />
+                              ) : (
+                                <Gift className="w-4 h-4 flex-shrink-0 animate-bounce text-amber-400" />
+                              )}
+                              <span className="font-semibold">
+                                ส่งของขวัญ {msg.giftName} <strong className="text-amber-300 text-[14px]">x{msg.repeatCount}</strong> ชิ้น!
+                              </span>
+                            </div>
+                          ) : msg.type === 'follow' ? (
+                            <span className="text-cyan-400 font-semibold flex items-center gap-1">
+                              <UserPlus className="w-3.5 h-3.5 flex-shrink-0" /> ได้กดติดตามสตรีมสดแล้ว!
+                            </span>
+                          ) : msg.type === 'like' ? (
+                            <span className="text-rose-400 font-semibold flex items-center gap-1">
+                              <Heart className="w-3.5 h-3.5 flex-shrink-0 fill-rose-500 text-rose-500" /> ถูกใจสตรีมสดแล้ว (x{msg.likeCount})!
+                            </span>
+                          ) : msg.type === 'donate_alert' ? (
+                            <div className="flex flex-col gap-1 w-full bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-xl text-amber-200">
+                              <span className="text-amber-400 font-bold flex items-center gap-1.5 self-start">
+                                <Coins className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+                                ได้สนับสนุนโอนเงิน <strong className="text-white bg-amber-600/35 px-1.5 py-0.5 rounded font-mono text-[14px]">฿{msg.amount || 0}</strong> บาท!
+                              </span>
+                              {msg.comment && <p className="text-zinc-200 text-xs italic pl-5 mt-0.5 border-l border-amber-500/30 font-medium leading-normal">"{msg.comment}"</p>}
+                            </div>
+                          ) : (
+                            <span className="text-lime-400 font-semibold flex items-center gap-1">
+                              <Share2 className="w-3.5 h-3.5 flex-shrink-0" /> ได้ช่วยแชร์สตรีมสดแล้ว!
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                    </div>
+                  </motion.div>
+                );
+              }
 
               return (
                 <motion.div
@@ -3381,6 +4298,14 @@ export default function OverlayView({ settingsOverride, isDemo = false }: Overla
                           <span className="text-rose-400 font-semibold flex items-center gap-1 py-0.5">
                             <Heart className="w-3.5 h-3.5 flex-shrink-0 inline fill-rose-500 text-rose-500" /> ถูกใจสตรีมสดแล้ว (x{msg.likeCount})!
                           </span>
+                        ) : msg.type === 'donate_alert' ? (
+                          <div className="flex flex-col gap-1 w-full bg-yellow-500/10 border border-yellow-500/20 p-2.5 rounded-xl text-yellow-100">
+                            <span className="text-yellow-400 font-bold flex items-center gap-1.5 self-start text-[12.5px]">
+                              <Coins className="w-4 h-4 text-yellow-400 animate-pulse shrink-0" />
+                              ได้สนับสนุนโอนเงิน <strong className="text-white bg-yellow-600/35 px-1.5 py-0.5 rounded font-mono text-[13.5px]">฿{msg.amount || 0}</strong> บาท!
+                            </span>
+                            {msg.comment && <p className="text-slate-300 text-xs italic pl-5 mt-0.5 border-l border-yellow-500/30 font-medium font-sans">"{msg.comment}"</p>}
+                          </div>
                         ) : (
                           <span className="text-lime-400 font-semibold flex items-center gap-1 py-0.5">
                             <Share2 className="w-3.5 h-3.5 flex-shrink-0 inline" /> ได้ช่วยแชร์สตรีมสดแล้ว!
